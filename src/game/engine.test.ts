@@ -39,6 +39,13 @@ describe("engine", () => {
     expect(() => applyAction(afterAttack, "p-1", { type: "attack" })).toThrow("cooldown");
   });
 
+  test("attack out of range is rejected", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 12, y: 12 };
+
+    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of attack range");
+  });
+
   test("zombie moves toward nearest player on tick", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 4, y: 2 };
@@ -53,6 +60,13 @@ describe("engine", () => {
     const next = applyAction(state, "p-1", { type: "attack" });
     expect(next.zombies["z-1"]?.alive).toBe(false);
     expect(next.status).toBe("won");
+  });
+
+  test("completed game cannot accept additional actions", () => {
+    const state = makeState();
+    state.status = "won";
+
+    expect(() => applyAction(state, "p-1", { type: "wait" })).toThrow("already completed");
   });
 
   test("game status flips to lost when all players die", () => {

@@ -1,21 +1,55 @@
-# bun-react-tailwind-template
+# RPC Zombie Game (Bun + React)
 
-To install dependencies:
+Server-authoritative zombie survival game with:
+
+- deterministic game engine
+- RPC gameplay endpoints
+- in-memory session/lobby management
+- optional Supabase-backed lobby/auth mode
+- React isometric canvas client + HUD + observation panel
+
+## Install
 
 ```bash
 bun install
 ```
 
-To start a development server:
+## Run (development)
 
 ```bash
 bun dev
 ```
 
-To run for production:
+Open `http://127.0.0.1:3000`.
+
+## Build
 
 ```bash
-bun start
+bun run build
 ```
 
-This project was created using `bun init` in bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Test
+
+```bash
+bun test
+```
+
+## API Smoke Test
+
+Run while server is already running:
+
+```bash
+bun run smoke:api
+```
+
+## Supabase Mode
+
+Supabase is enabled only when all env vars are set:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Without these, lobby APIs fall back to local in-memory mode for development.
+
+See `GAME_API.md` for endpoint contracts and agent play loop guidance.
