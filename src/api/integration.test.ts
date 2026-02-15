@@ -356,6 +356,99 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("actions are rejected after game is completed", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "Winner",
+        zombieCount: 1,
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+    let latestStatus: string = "active";
+    for (let index = 0; index < 80; index++) {
+      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId }),
+      });
+      const tickPayload = await tickResponse.json();
+      expect(tickResponse.status).toBe(200);
+      expect(tickPayload.ok).toBe(true);
+      latestStatus = tickPayload.data.state.status as string;
+      if (latestStatus !== "active") {
+        break;
+      }
+    }
+
+    expect(latestStatus).toBe("lost");
+
+    const rejectedAction = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "wait" },
+      }),
+    });
+    const rejectedPayload = await rejectedAction.json();
+    expect(rejectedAction.status).toBe(409);
+    expect(rejectedPayload.ok).toBe(false);
+    expect(rejectedPayload.error.code).toBe("GAME_COMPLETED");
+  });
+
+  test("manual tick is rejected after game completion", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TickWinner",
+        zombieCount: 1,
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+    let latestStatus: string = "active";
+    for (let index = 0; index < 80; index++) {
+      const tickProgress = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId }),
+      });
+      const progressPayload = await tickProgress.json();
+      expect(tickProgress.status).toBe(200);
+      expect(progressPayload.ok).toBe(true);
+      latestStatus = progressPayload.data.state.status as string;
+      if (latestStatus !== "active") {
+        break;
+      }
+    }
+
+    expect(latestStatus).toBe("lost");
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const tickPayload = await tickResponse.json();
+
+    expect(tickResponse.status).toBe(409);
+    expect(tickPayload.ok).toBe(false);
+    expect(tickPayload.error.code).toBe("GAME_COMPLETED");
+  });
+
   test("server join enforces max player capacity", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
