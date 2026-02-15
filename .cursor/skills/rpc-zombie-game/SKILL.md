@@ -31,6 +31,12 @@ Drive the server-authoritative simulation through API actions without direct sta
    - `POST /api/servers/:id/join`
 4. Use returned `sessionId` + `playerId` in normal game loop endpoints.
 
+### Important session/server constraints
+
+- If calling `POST /api/game/join` with `serverId`, the server must exist, else `SERVER_NOT_FOUND`.
+- If calling `POST /api/game/join` with both `session` and `serverId`, they must match, else `SESSION_SERVER_MISMATCH`.
+- If target session belongs to a lobby server at max capacity, join returns `SERVER_FULL`.
+
 ## Auth Behavior
 
 - If response from `/api/servers` contains `mode: "disabled"`:
@@ -48,3 +54,9 @@ Drive the server-authoritative simulation through API actions without direct sta
 ## References
 
 See `reference.md` for endpoint payload examples and error mapping.
+
+## Verification commands
+
+- `bun run smoke:api` (fallback mode smoke checks)
+- `bun run smoke:api:supabase-auth` (auth gate smoke checks)
+- `bun run verify` (typecheck + tests + build + both smoke suites)
