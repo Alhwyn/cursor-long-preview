@@ -168,6 +168,54 @@ describe("RPC API integration (fallback mode)", () => {
     expect(left2Payload.error.code).toBe("MOVE_BLOCKED");
   });
 
+  test("move into occupied tile returns conflict", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const hostJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "OccupyHost" }),
+    });
+    const hostJoinPayload = await hostJoinResponse.json();
+    const sessionId = hostJoinPayload.data.sessionId as string;
+    const hostPlayerId = hostJoinPayload.data.playerId as string;
+
+    const guestJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId, playerName: "OccupyGuest" }),
+    });
+    const guestJoinPayload = await guestJoinResponse.json();
+    expect(guestJoinResponse.status).toBe(200);
+    expect(guestJoinPayload.ok).toBe(true);
+
+    const moveUp = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: hostPlayerId,
+        action: { type: "move", direction: "up" },
+      }),
+    });
+    expect(moveUp.status).toBe(200);
+
+    const moveLeft = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: hostPlayerId,
+        action: { type: "move", direction: "left" },
+      }),
+    });
+    const moveLeftPayload = await moveLeft.json();
+    expect(moveLeft.status).toBe(409);
+    expect(moveLeftPayload.ok).toBe(false);
+    expect(moveLeftPayload.error.code).toBe("MOVE_OCCUPIED");
+  });
+
   test("invalid zombieCount is rejected with 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
