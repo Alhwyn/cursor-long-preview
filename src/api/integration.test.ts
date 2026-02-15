@@ -356,6 +356,22 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("invalid JSON body returns 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_JSON");
+  });
+
   test("actions are rejected after game is completed", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -581,5 +597,24 @@ describe("RPC API integration (supabase auth gate)", () => {
     expect(response.status).toBe(500);
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("SUPABASE_QUERY_FAILED");
+  });
+
+  test("server create rejects invalid bearer token before body parsing", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer invalid-token",
+      },
+      body: "{invalid-json",
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("FORBIDDEN");
   });
 });
