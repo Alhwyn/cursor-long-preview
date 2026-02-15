@@ -49,6 +49,8 @@ Request:
 
 `zombieCount` must be an integer from `1` to `32`.
 
+If `serverId` is provided, it must match an existing server (`404 SERVER_NOT_FOUND` otherwise).
+
 Response `201` (new) / `200` (join existing):
 
 ```json

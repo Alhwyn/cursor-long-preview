@@ -147,6 +147,13 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
       });
     }
 
+    if (serverId) {
+      const existingServer = await getServer(serverId);
+      if (!existingServer) {
+        throw new HttpError(404, "SERVER_NOT_FOUND", `Server "${serverId}" was not found.`);
+      }
+    }
+
     const { session, player } = createSession({
       serverId,
       playerId,

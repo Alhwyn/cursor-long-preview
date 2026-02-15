@@ -148,6 +148,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("joining game with unknown serverId returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "UnknownServerJoin",
+        serverId: "srv-missing",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("SERVER_NOT_FOUND");
+  });
+
   test("observe defaults to first player when player query omitted", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
