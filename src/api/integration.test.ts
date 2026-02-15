@@ -600,6 +600,74 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
   });
 
+  test("attack cooldown is enforced once in range", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CooldownTester", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    let inRange = false;
+    for (let step = 0; step < 80; step++) {
+      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId }),
+      });
+      const tickPayload = await tickResponse.json();
+      expect(tickResponse.status).toBe(200);
+      expect(tickPayload.ok).toBe(true);
+
+      const observeResponse = await fetch(
+        `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+      );
+      const observePayload = await observeResponse.json();
+      expect(observeResponse.status).toBe(200);
+      expect(observePayload.ok).toBe(true);
+      const nearestDistance = observePayload.data.observation.nearestZombie?.distance as number | undefined;
+
+      if (nearestDistance !== undefined && nearestDistance <= 1) {
+        inRange = true;
+        break;
+      }
+    }
+
+    expect(inRange).toBe(true);
+
+    const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack" },
+      }),
+    });
+    const firstAttackPayload = await firstAttack.json();
+    expect(firstAttack.status).toBe(200);
+    expect(firstAttackPayload.ok).toBe(true);
+
+    const secondAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack" },
+      }),
+    });
+    const secondAttackPayload = await secondAttack.json();
+    expect(secondAttack.status).toBe(409);
+    expect(secondAttackPayload.ok).toBe(false);
+    expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
   test("non-object action payload returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
