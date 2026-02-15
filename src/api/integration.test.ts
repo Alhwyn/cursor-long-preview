@@ -530,6 +530,73 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondJoinPayload.error.code).toBe("SERVER_FULL");
   });
 
+  test("direct game join with serverId links session and enforces server capacity", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createServerResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Direct Join Capacity",
+        maxPlayers: 2,
+      }),
+    });
+    const createServerPayload = await createServerResponse.json();
+    const serverId = createServerPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serverId,
+        playerName: "DirectHost",
+      }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+    const sessionId = firstJoinPayload.data.sessionId as string;
+
+    expect(firstJoin.status).toBe(201);
+    expect(firstJoinPayload.ok).toBe(true);
+    expect(firstJoinPayload.data.state.serverId).toBe(serverId);
+
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        serverId,
+        playerName: "DirectGuest",
+      }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(200);
+    expect(secondJoinPayload.ok).toBe(true);
+
+    const overflowJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        serverId,
+        playerName: "DirectOverflow",
+      }),
+    });
+    const overflowJoinPayload = await overflowJoin.json();
+
+    expect(overflowJoin.status).toBe(409);
+    expect(overflowJoinPayload.ok).toBe(false);
+    expect(overflowJoinPayload.error.code).toBe("SERVER_FULL");
+
+    const listResponse = await fetch(`${baseUrl}/api/servers`);
+    const listPayload = await listResponse.json();
+    const serverRow = (listPayload.data.servers as Array<{ id: string; currentPlayers: number }>).find(
+      entry => entry.id === serverId,
+    );
+    expect(serverRow).toBeDefined();
+    expect(serverRow?.currentPlayers).toBe(2);
+  });
+
   test("joining existing session with mismatched serverId returns 409", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
