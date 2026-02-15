@@ -335,6 +335,37 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observePayload.error.code).toBe("SESSION_NOT_FOUND");
   });
 
+  test("action and tick reject unknown sessions", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "missing-session-id",
+        playerId: "missing-player-id",
+        action: { type: "wait" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+    expect(actionResponse.status).toBe(404);
+    expect(actionPayload.ok).toBe(false);
+    expect(actionPayload.error.code).toBe("SESSION_NOT_FOUND");
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "missing-session-id",
+      }),
+    });
+    const tickPayload = await tickResponse.json();
+    expect(tickResponse.status).toBe(404);
+    expect(tickPayload.ok).toBe(false);
+    expect(tickPayload.error.code).toBe("SESSION_NOT_FOUND");
+  });
+
   test("observe without session query returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -595,6 +626,37 @@ describe("RPC API integration (fallback mode)", () => {
     expect(join3.status).toBe(409);
     expect(join3Payload.ok).toBe(false);
     expect(join3Payload.error.code).toBe("SERVER_FULL");
+  });
+
+  test("joining same session with duplicate playerId is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "DuplicateIdHost",
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const duplicateJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        playerName: "DuplicateIdHost",
+      }),
+    });
+    const duplicatePayload = await duplicateJoin.json();
+
+    expect(duplicateJoin.status).toBe(409);
+    expect(duplicatePayload.ok).toBe(false);
+    expect(duplicatePayload.error.code).toBe("PLAYER_EXISTS");
   });
 
   test("joining unknown server returns 404", async () => {
