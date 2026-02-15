@@ -167,6 +167,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("SERVER_NOT_FOUND");
   });
 
+  test("joining unknown existing session returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "missing-session-id",
+        playerName: "GhostJoiner",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("SESSION_NOT_FOUND");
+  });
+
   test("joining existing server session honors server max player limit", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -297,6 +316,23 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observeResponse.status).toBe(404);
     expect(observePayload.ok).toBe(false);
     expect(observePayload.error.code).toBe("PLAYER_NOT_FOUND");
+  });
+
+  test("state and observe reject unknown sessions", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const stateResponse = await fetch(`${baseUrl}/api/game/state?session=${encodeURIComponent("missing-session-id")}`);
+    const statePayload = await stateResponse.json();
+    expect(stateResponse.status).toBe(404);
+    expect(statePayload.ok).toBe(false);
+    expect(statePayload.error.code).toBe("SESSION_NOT_FOUND");
+
+    const observeResponse = await fetch(`${baseUrl}/api/game/observe?session=${encodeURIComponent("missing-session-id")}`);
+    const observePayload = await observeResponse.json();
+    expect(observeResponse.status).toBe(404);
+    expect(observePayload.ok).toBe(false);
+    expect(observePayload.error.code).toBe("SESSION_NOT_FOUND");
   });
 
   test("observe without session query returns 400", async () => {
