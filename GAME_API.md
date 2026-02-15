@@ -48,6 +48,10 @@ Request:
 ```
 
 `zombieCount` must be an integer from `1` to `32`.
+If `playerName` is omitted/blank, server defaults to `Survivor-N`.
+If `playerId` is omitted:
+- new session defaults to `p-<sessionId>-1`
+- subsequent joins default to `p-2`, `p-3`, ...
 
 If `serverId` is provided, it must match an existing server (`404 SERVER_NOT_FOUND` otherwise).
 

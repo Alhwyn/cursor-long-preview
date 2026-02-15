@@ -102,6 +102,69 @@ describe("RPC API integration (fallback mode)", () => {
     expect(statePayload.data.state.tick).toBeGreaterThanOrEqual(1);
   });
 
+  test("join defaults player naming and deterministic ids when not provided", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const firstPayload = await firstJoin.json();
+    expect(firstJoin.status).toBe(201);
+    expect(firstPayload.ok).toBe(true);
+
+    const sessionId = firstPayload.data.sessionId as string;
+    expect(firstPayload.data.playerName).toBe("Survivor-1");
+    expect(firstPayload.data.playerId).toBe(`p-${sessionId}-1`);
+
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const secondPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(200);
+    expect(secondPayload.ok).toBe(true);
+    expect(secondPayload.data.playerName).toBe("Survivor-2");
+    expect(secondPayload.data.playerId).toBe("p-2");
+  });
+
+  test("join accepts explicit playerId for session creation and joining", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "custom-player-1",
+        playerName: "CustomOne",
+      }),
+    });
+    const firstPayload = await firstJoin.json();
+    expect(firstJoin.status).toBe(201);
+    expect(firstPayload.ok).toBe(true);
+    expect(firstPayload.data.playerId).toBe("custom-player-1");
+
+    const sessionId = firstPayload.data.sessionId as string;
+
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: "custom-player-2",
+        playerName: "CustomTwo",
+      }),
+    });
+    const secondPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(200);
+    expect(secondPayload.ok).toBe(true);
+    expect(secondPayload.data.playerId).toBe("custom-player-2");
+  });
+
   test("invalid direction is rejected with 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
