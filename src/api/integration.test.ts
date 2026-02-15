@@ -943,6 +943,93 @@ describe("RPC API integration (fallback mode)", () => {
     expect(join3Payload.error.code).toBe("SERVER_FULL");
   });
 
+  test("server join reuses active session until completion", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Session Reuse",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Reuse-A" }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+    const sessionId = firstJoinPayload.data.sessionId as string;
+    expect(firstJoin.status).toBe(200);
+
+    const secondJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Reuse-B" }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(200);
+    expect(secondJoinPayload.data.sessionId).toBe(sessionId);
+  });
+
+  test("server join starts a new session after active one completes", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Session Rotation",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Rotate-A" }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+    const firstSessionId = firstJoinPayload.data.sessionId as string;
+    expect(firstJoin.status).toBe(200);
+
+    let finalStatus = "active";
+    for (let index = 0; index < 80; index++) {
+      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: firstSessionId }),
+      });
+      const tickPayload = await tickResponse.json();
+      expect(tickResponse.status).toBe(200);
+      expect(tickPayload.ok).toBe(true);
+      finalStatus = tickPayload.data.state.status as string;
+      if (finalStatus !== "active") {
+        break;
+      }
+    }
+    expect(finalStatus).not.toBe("active");
+
+    const secondJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Rotate-B" }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+
+    expect(secondJoin.status).toBe(200);
+    expect(secondJoinPayload.ok).toBe(true);
+    expect(secondJoinPayload.data.sessionId).not.toBe(firstSessionId);
+  });
+
   test("joining same session with duplicate playerId is rejected", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
