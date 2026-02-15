@@ -148,6 +148,50 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("observe defaults to first player when player query omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Observer" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const expectedPlayerId = joinPayload.data.playerId as string;
+
+    const observeResponse = await fetch(`${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}`);
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    expect(observePayload.data.playerId).toBe(expectedPlayerId);
+    expect(observePayload.data.observation.playerId).toBe(expectedPlayerId);
+  });
+
+  test("observe with unknown player returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Observer2" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent("ghost-player")}`,
+    );
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(404);
+    expect(observePayload.ok).toBe(false);
+    expect(observePayload.error.code).toBe("PLAYER_NOT_FOUND");
+  });
+
   test("server join enforces max player capacity", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
