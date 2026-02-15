@@ -605,6 +605,51 @@ describe("RPC API integration (fallback mode)", () => {
     expect(tickPayload.error.code).toBe("INVALID_JSON");
   });
 
+  test("non-object JSON body returns INVALID_BODY across key endpoints", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([]),
+    });
+    const joinPayload = await joinResponse.json();
+    expect(joinResponse.status).toBe(400);
+    expect(joinPayload.ok).toBe(false);
+    expect(joinPayload.error.code).toBe("INVALID_BODY");
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([]),
+    });
+    const actionPayload = await actionResponse.json();
+    expect(actionResponse.status).toBe(400);
+    expect(actionPayload.ok).toBe(false);
+    expect(actionPayload.error.code).toBe("INVALID_BODY");
+
+    const serverCreateResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([]),
+    });
+    const serverCreatePayload = await serverCreateResponse.json();
+    expect(serverCreateResponse.status).toBe(400);
+    expect(serverCreatePayload.ok).toBe(false);
+    expect(serverCreatePayload.error.code).toBe("INVALID_BODY");
+
+    const serverJoinResponse = await fetch(`${baseUrl}/api/servers/not-a-server/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([]),
+    });
+    const serverJoinPayload = await serverJoinResponse.json();
+    expect(serverJoinResponse.status).toBe(400);
+    expect(serverJoinPayload.ok).toBe(false);
+    expect(serverJoinPayload.error.code).toBe("INVALID_BODY");
+  });
+
   test("actions are rejected after game is completed", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
