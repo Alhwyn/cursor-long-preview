@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_URL="${1:-http://127.0.0.1:3000}"
+
+unauthorized_status="$(curl -sS -o /tmp/rpc-zombie-smoke-supabase-create.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Needs Auth","maxPlayers":4}')"
+
+python3 - <<'PY' "${unauthorized_status}"
+import json
+import pathlib
+import sys
+
+unauthorized_status = int(sys.argv[1])
+create_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create.json").read_text())
+
+assert unauthorized_status == 401, f"expected 401 when missing bearer token, got {unauthorized_status}"
+assert create_payload["ok"] is False, "expected create failure without token"
+assert create_payload["error"]["code"] == "UNAUTHORIZED", f"unexpected code: {create_payload['error']['code']}"
+
+print("api-smoke-supabase-auth: PASS")
+print("create_without_token=401 UNAUTHORIZED")
+PY

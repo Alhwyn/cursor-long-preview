@@ -42,6 +42,12 @@ Run while server is already running:
 bun run smoke:api
 ```
 
+Supabase-auth gate smoke test (run server with Supabase env vars set):
+
+```bash
+bun run smoke:api:supabase-auth
+```
+
 ## Supabase Mode
 
 Supabase is enabled only when all env vars are set:

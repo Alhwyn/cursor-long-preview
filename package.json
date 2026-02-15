@@ -8,7 +8,8 @@
     "start": "NODE_ENV=production bun src/index.ts",
     "build": "bun run build.ts",
     "test": "bun test",
-    "smoke:api": "./scripts/api-smoke.sh"
+    "smoke:api": "./scripts/api-smoke.sh",
+    "smoke:api:supabase-auth": "./scripts/api-smoke-supabase-auth.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
