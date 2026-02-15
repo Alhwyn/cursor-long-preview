@@ -189,6 +189,22 @@ describe("RPC API integration (fallback mode)", () => {
     expect(join3Payload.ok).toBe(false);
     expect(join3Payload.error.code).toBe("SERVER_FULL");
   });
+
+  test("joining unknown server returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers/${encodeURIComponent("not-a-server")}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Ghost" }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("SERVER_NOT_FOUND");
+  });
 });
 
 describe("RPC API integration (supabase auth gate)", () => {

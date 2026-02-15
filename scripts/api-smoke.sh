@@ -22,9 +22,11 @@ servers_payload="$(curl -sS "${BASE_URL}/api/servers")"
 create_server_payload="$(curl -sS -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"Smoke Lobby","maxPlayers":2}')"
 server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["server"]["id"])' <<< "${create_server_payload}")"
 join_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-join-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerName":"LobbySmoke"}')"
+missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${bad_direction_status}" "${missing_query_status}" "${join_server_status}"
+python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${bad_direction_status}" "${missing_query_status}" "${join_server_status}" "${missing_server_status}"
 import json
+import pathlib
 import sys
 
 join_payload = json.loads(sys.argv[1])
@@ -33,6 +35,8 @@ action_status = int(sys.argv[3])
 bad_direction_status = int(sys.argv[4])
 missing_query_status = int(sys.argv[5])
 join_server_status = int(sys.argv[6])
+missing_server_status = int(sys.argv[7])
+missing_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-server.json").read_text())
 
 assert join_payload["ok"] is True, "join failed"
 assert servers_payload["ok"] is True, "server list failed"
@@ -40,6 +44,9 @@ assert action_status == 200, f"move action status unexpected: {action_status}"
 assert bad_direction_status == 400, f"bad direction should be 400, got {bad_direction_status}"
 assert missing_query_status == 400, f"missing state query should be 400, got {missing_query_status}"
 assert join_server_status == 200, f"join server should be 200, got {join_server_status}"
+assert missing_server_status == 404, f"missing server join should be 404, got {missing_server_status}"
+assert missing_server_payload["ok"] is False, "missing server payload should be failure"
+assert missing_server_payload["error"]["code"] == "SERVER_NOT_FOUND", f"missing server error mismatch: {missing_server_payload['error']['code']}"
 
 print("api-smoke: PASS")
 print(f"session={join_payload['data']['sessionId']}")
