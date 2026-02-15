@@ -663,6 +663,36 @@ describe("RPC API integration (fallback mode)", () => {
     expect(serverRow?.currentPlayers).toBe(2);
   });
 
+  test("direct game join trims serverId when creating linked session", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createServerResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Trimmed Direct Server Id",
+        maxPlayers: 3,
+      }),
+    });
+    const createServerPayload = await createServerResponse.json();
+    const serverId = createServerPayload.data.server.id as string;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serverId: `  ${serverId}  `,
+        playerName: "TrimmedDirectJoin",
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    expect(joinResponse.status).toBe(201);
+    expect(joinPayload.ok).toBe(true);
+    expect(joinPayload.data.state.serverId).toBe(serverId);
+  });
+
   test("joining existing session with mismatched serverId returns 409", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
