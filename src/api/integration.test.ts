@@ -1853,6 +1853,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.data.server.maxPlayers).toBe(4);
   });
 
+  test("server create with blank description omits description field", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Blank Description Lobby",
+        description: "   ",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.server.description).toBeUndefined();
+  });
+
   test("servers list preserves creation order in fallback mode", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
