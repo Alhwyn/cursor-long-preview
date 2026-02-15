@@ -37,6 +37,7 @@ import type { Action, Direction, Player } from "./game/types";
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
+const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 
 function bunParams(request: Request): Record<string, string> {
   const req = request as Request & { params?: Record<string, string> };
@@ -356,6 +357,7 @@ configureServerPlayerCountResolver(sessionId => {
 });
 
 const server = serve({
+  port: Number.isFinite(PORT) ? PORT : 3000,
   routes: {
     "/api/game/join": {
       POST: req => withErrorBoundary(() => createOrJoinGameSession(req)),
