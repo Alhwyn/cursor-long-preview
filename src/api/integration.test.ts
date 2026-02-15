@@ -647,6 +647,46 @@ describe("RPC API integration (fallback mode)", () => {
     expect(mismatchPayload.error.code).toBe("SESSION_SERVER_MISMATCH");
   });
 
+  test("join trims session and server identifiers before matching", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Trimmed Join Identifiers",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const initialJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimHost" }),
+    });
+    const initialJoinPayload = await initialJoin.json();
+    const sessionId = initialJoinPayload.data.sessionId as string;
+
+    const trimmedJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: `  ${sessionId}  `,
+        serverId: `  ${serverId}  `,
+        playerName: "TrimGuest",
+      }),
+    });
+    const trimmedJoinPayload = await trimmedJoin.json();
+
+    expect(trimmedJoin.status).toBe(200);
+    expect(trimmedJoinPayload.ok).toBe(true);
+    expect(trimmedJoinPayload.data.sessionId).toBe(sessionId);
+    expect(trimmedJoinPayload.data.state.serverId).toBe(serverId);
+  });
+
   test("observe defaults to first player when player query omitted", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -711,6 +751,30 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observeResponse.status).toBe(400);
     expect(observePayload.ok).toBe(false);
     expect(observePayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("observe trims player query identifiers", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ObserverTrimmedQuery" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(`  ${playerId}  `)}`,
+    );
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    expect(observePayload.data.playerId).toBe(playerId);
+    expect(observePayload.data.observation.playerId).toBe(playerId);
   });
 
   test("state and observe reject unknown sessions", async () => {
