@@ -356,6 +356,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("non-object action payload returns 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "BadActionShape" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: "not-an-object",
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(400);
+    expect(actionPayload.ok).toBe(false);
+    expect(actionPayload.error.code).toBe("INVALID_BODY");
+  });
+
   test("invalid JSON body returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -533,6 +560,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.data.mode).toBe("disabled");
+  });
+
+  test("server create rejects invalid maxPlayers value", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Invalid Capacity",
+        maxPlayers: 64,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_MAX_PLAYERS");
   });
 });
 
