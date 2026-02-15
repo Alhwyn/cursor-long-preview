@@ -48,6 +48,14 @@ Supabase-auth gate smoke test (run server with Supabase env vars set):
 bun run smoke:api:supabase-auth
 ```
 
+## Full Verification
+
+Runs strict typecheck, tests, production build, fallback smoke test, and Supabase auth-gate smoke test:
+
+```bash
+bun run verify
+```
+
 ## Supabase Mode
 
 Supabase is enabled only when all env vars are set:

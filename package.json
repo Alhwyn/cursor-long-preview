@@ -9,7 +9,8 @@
     "build": "bun run build.ts",
     "test": "bun test",
     "smoke:api": "./scripts/api-smoke.sh",
-    "smoke:api:supabase-auth": "./scripts/api-smoke-supabase-auth.sh"
+    "smoke:api:supabase-auth": "./scripts/api-smoke-supabase-auth.sh",
+    "verify": "./scripts/verify.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
