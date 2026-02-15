@@ -1,11 +1,30 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+interface SupabaseEnv {
+  url?: string;
+  anonKey?: string;
+  serviceRoleKey?: string;
+}
 
-let cachedPublicClient: SupabaseClient | null | undefined;
-let cachedAdminClient: SupabaseClient | null | undefined;
+interface CachedClient {
+  key: string;
+  client: SupabaseClient | null;
+}
+
+let cachedPublicClient: CachedClient | null = null;
+let cachedAdminClient: CachedClient | null = null;
+
+function readSupabaseEnv(): SupabaseEnv {
+  return {
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
+function clientCacheKey(url?: string, key?: string): string {
+  return `${url ?? ""}|${key ?? ""}`;
+}
 
 export interface AuthContext {
   mode: "disabled" | "enabled";
@@ -16,49 +35,59 @@ export interface AuthContext {
 }
 
 export function isSupabaseEnabled(): boolean {
-  return Boolean(supabaseUrl && supabaseAnonKey && supabaseServiceRoleKey);
+  const { url, anonKey, serviceRoleKey } = readSupabaseEnv();
+  return Boolean(url && anonKey && serviceRoleKey);
+}
+
+function createSupabaseClient(url: string, key: string): SupabaseClient {
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
 }
 
 export function getSupabasePublicClient(): SupabaseClient | null {
-  if (cachedPublicClient !== undefined) {
-    return cachedPublicClient;
+  const { url, anonKey } = readSupabaseEnv();
+  const cacheKey = clientCacheKey(url, anonKey);
+
+  if (cachedPublicClient?.key === cacheKey) {
+    return cachedPublicClient.client;
   }
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    cachedPublicClient = null;
-    return cachedPublicClient;
+  if (!url || !anonKey) {
+    cachedPublicClient = { key: cacheKey, client: null };
+    return null;
   }
 
-  cachedPublicClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-
-  return cachedPublicClient;
+  const client = createSupabaseClient(url, anonKey);
+  cachedPublicClient = { key: cacheKey, client };
+  return client;
 }
 
 export function getSupabaseAdminClient(): SupabaseClient | null {
-  if (cachedAdminClient !== undefined) {
-    return cachedAdminClient;
+  const { url, serviceRoleKey } = readSupabaseEnv();
+  const cacheKey = clientCacheKey(url, serviceRoleKey);
+
+  if (cachedAdminClient?.key === cacheKey) {
+    return cachedAdminClient.client;
   }
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    cachedAdminClient = null;
-    return cachedAdminClient;
+  if (!url || !serviceRoleKey) {
+    cachedAdminClient = { key: cacheKey, client: null };
+    return null;
   }
 
-  cachedAdminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
+  const client = createSupabaseClient(url, serviceRoleKey);
+  cachedAdminClient = { key: cacheKey, client };
+  return client;
+}
 
-  return cachedAdminClient;
+export function clearSupabaseClientsForTests(): void {
+  cachedPublicClient = null;
+  cachedAdminClient = null;
 }
 
 export function parseBearerToken(authorizationHeader: string | null): string | null {
@@ -66,11 +95,12 @@ export function parseBearerToken(authorizationHeader: string | null): string | n
     return null;
   }
 
-  const [scheme, token] = authorizationHeader.split(" ", 2);
-  if (!scheme || !token || scheme.toLowerCase() !== "bearer") {
+  const match = authorizationHeader.trim().match(/^bearer\s+(.+)$/i);
+  if (!match) {
     return null;
   }
-  return token.trim();
+  const token = match[1]?.trim();
+  return token ? token : null;
 }
 
 export async function verifyBearerToken(authorizationHeader: string | null): Promise<AuthContext> {
