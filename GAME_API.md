@@ -49,7 +49,7 @@ Request:
 
 `zombieCount` must be an integer from `1` to `32`.
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
-If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings.
+If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
 If `playerId` is omitted:
 - new session defaults to `p-<sessionId>-1`
 - subsequent joins default to `p-2`, `p-3`, ...
@@ -79,6 +79,8 @@ Response `201` (new) / `200` (join existing):
 ### `GET /api/game/state?session=<sessionId>`
 
 Get canonical session state.
+
+`session` query value is required and is trimmed before lookup.
 
 Response:
 
@@ -163,6 +165,8 @@ Action schema:
 - `{"type":"attack","targetId":"optional-zombie-id"}` (`targetId` must be non-empty when provided)
 - `{"type":"wait"}`
 
+`session` and `playerId` are required non-empty strings and are trimmed before lookup.
+
 Response:
 
 ```json
@@ -190,6 +194,8 @@ Request:
   "session": "uuid"
 }
 ```
+
+`session` is a required non-empty string and is trimmed before lookup.
 
 Response:
 
@@ -247,6 +253,10 @@ Request:
 }
 ```
 
+`name` is required and trimmed.  
+`description` is optional; blank values normalize to empty/omitted metadata.  
+`maxPlayers` is optional and defaults to `4` (must be integer `1..32` when provided).
+
 Response:
 
 ```json
@@ -279,6 +289,7 @@ Request:
 ```
 
 `playerId` must be a non-empty string when provided.
+`playerId` values are trimmed before session join.
 
 Response:
 
