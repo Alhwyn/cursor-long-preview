@@ -165,6 +165,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondPayload.data.playerId).toBe("custom-player-2");
   });
 
+  test("joining session with blank playerName falls back to Survivor naming", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Host" }),
+    });
+    const firstPayload = await firstJoin.json();
+    const sessionId = firstPayload.data.sessionId as string;
+
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerName: "   ",
+      }),
+    });
+    const secondPayload = await secondJoin.json();
+
+    expect(secondJoin.status).toBe(200);
+    expect(secondPayload.ok).toBe(true);
+    expect(secondPayload.data.playerName).toBe("Survivor-2");
+  });
+
   test("invalid direction is rejected with 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
