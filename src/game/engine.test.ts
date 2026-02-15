@@ -109,6 +109,24 @@ describe("engine", () => {
     expect(observation.nearestZombie?.distance).toBe(1);
   });
 
+  test("observation tie-breaks nearest zombie by id and keeps entities sorted", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+    state.zombies["a-zombie"] = {
+      ...state.zombies["z-1"]!,
+      id: "a-zombie",
+      position: { x: 2, y: 3 },
+    };
+
+    const observation = toObservation(state, "p-1");
+    expect(observation.nearestZombie?.distance).toBe(1);
+    expect(observation.nearestZombie?.id).toBe("a-zombie");
+
+    const entityIds = observation.entities.map(entity => entity.id);
+    const sortedEntityIds = [...entityIds].sort((left, right) => left.localeCompare(right));
+    expect(entityIds).toEqual(sortedEntityIds);
+  });
+
   test("same input state and action produces deterministic output", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 4, y: 2 };
