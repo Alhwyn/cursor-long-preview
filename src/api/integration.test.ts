@@ -706,6 +706,18 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("MISSING_QUERY");
   });
 
+  test("state with blank session query returns MISSING_QUERY", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/state?session=%20%20%20`);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("MISSING_QUERY");
+  });
+
   test("tick without session field returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -720,6 +732,51 @@ describe("RPC API integration (fallback mode)", () => {
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("action and tick blank identifiers return INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const actionBlankSession = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "   ",
+        playerId: "player-1",
+        action: { type: "wait" },
+      }),
+    });
+    const actionBlankSessionPayload = await actionBlankSession.json();
+    expect(actionBlankSession.status).toBe(400);
+    expect(actionBlankSessionPayload.ok).toBe(false);
+    expect(actionBlankSessionPayload.error.code).toBe("INVALID_FIELD");
+
+    const actionBlankPlayer = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "session-1",
+        playerId: "   ",
+        action: { type: "wait" },
+      }),
+    });
+    const actionBlankPlayerPayload = await actionBlankPlayer.json();
+    expect(actionBlankPlayer.status).toBe(400);
+    expect(actionBlankPlayerPayload.ok).toBe(false);
+    expect(actionBlankPlayerPayload.error.code).toBe("INVALID_FIELD");
+
+    const tickBlankSession = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: "   ",
+      }),
+    });
+    const tickBlankSessionPayload = await tickBlankSession.json();
+    expect(tickBlankSession.status).toBe(400);
+    expect(tickBlankSessionPayload.ok).toBe(false);
+    expect(tickBlankSessionPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("invalid action type returns 400", async () => {
