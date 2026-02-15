@@ -1373,6 +1373,39 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("server create rejects invalid field types", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const invalidDescription = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Field Type Lobby",
+        description: 123,
+      }),
+    });
+    const invalidDescriptionPayload = await invalidDescription.json();
+
+    expect(invalidDescription.status).toBe(400);
+    expect(invalidDescriptionPayload.ok).toBe(false);
+    expect(invalidDescriptionPayload.error.code).toBe("INVALID_FIELD");
+
+    const invalidMaxPlayersType = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Field Type Lobby",
+        maxPlayers: "4",
+      }),
+    });
+    const invalidMaxPlayersTypePayload = await invalidMaxPlayersType.json();
+
+    expect(invalidMaxPlayersType.status).toBe(400);
+    expect(invalidMaxPlayersTypePayload.ok).toBe(false);
+    expect(invalidMaxPlayersTypePayload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("server create trims text fields and defaults maxPlayers", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

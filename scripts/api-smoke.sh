@@ -72,9 +72,11 @@ server_two_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]
 mismatch_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-session-mismatch.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d "{\"session\":\"${linked_session_id}\",\"serverId\":\"${server_two_id}\",\"playerName\":\"Mismatch\"}")"
 invalid_server_join_field_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-join-field.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerName":123}')"
 blank_server_join_player_id_status="$(curl -sS -o /tmp/rpc-zombie-smoke-blank-server-join-player-id.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"   ","playerName":"BlankServerJoinId"}')"
+invalid_server_description_type_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-description-type.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerDescriptionType","description":123}')"
+invalid_server_maxplayers_type_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-maxplayers-type.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerMaxPlayersType","maxPlayers":"4"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${join_server_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}"
+python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${join_server_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}"
 import json
 import pathlib
 import sys
@@ -107,6 +109,8 @@ blank_server_join_player_id_status = int(sys.argv[25])
 missing_server_status = int(sys.argv[26])
 missing_join_server_status = int(sys.argv[27])
 mismatch_join_status = int(sys.argv[28])
+invalid_server_description_type_status = int(sys.argv[29])
+invalid_server_maxplayers_type_status = int(sys.argv[30])
 missing_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-server.json").read_text())
 missing_join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-join-server.json").read_text())
 mismatch_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-session-mismatch.json").read_text())
@@ -122,6 +126,12 @@ blank_attack_target_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-bla
 fractional_zombie_count_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-fractional-zombie-count.json").read_text())
 invalid_server_join_field_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-join-field.json").read_text())
 blank_server_join_player_id_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-blank-server-join-player-id.json").read_text())
+invalid_server_description_type_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-description-type.json").read_text()
+)
+invalid_server_maxplayers_type_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-maxplayers-type.json").read_text()
+)
 out_of_range_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-attack.json").read_text())
 missing_state_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-state.json").read_text())
 missing_observe_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-observe.json").read_text())
@@ -155,6 +165,12 @@ assert blank_tick_session_status == 400, f"blank tick session should be 400, got
 assert join_server_status == 200, f"join server should be 200, got {join_server_status}"
 assert invalid_server_join_field_status == 400, f"server join invalid field should be 400, got {invalid_server_join_field_status}"
 assert blank_server_join_player_id_status == 400, f"server join blank playerId should be 400, got {blank_server_join_player_id_status}"
+assert invalid_server_description_type_status == 400, (
+    f"server create with invalid description type should be 400, got {invalid_server_description_type_status}"
+)
+assert invalid_server_maxplayers_type_status == 400, (
+    f"server create with invalid maxPlayers type should be 400, got {invalid_server_maxplayers_type_status}"
+)
 assert missing_server_status == 404, f"missing server join should be 404, got {missing_server_status}"
 assert missing_join_server_status == 404, f"game join with missing server should be 404, got {missing_join_server_status}"
 assert mismatch_join_status == 409, f"session/server mismatch should be 409, got {mismatch_join_status}"
@@ -200,6 +216,14 @@ assert invalid_server_join_field_payload["ok"] is False, "invalid server join fi
 assert invalid_server_join_field_payload["error"]["code"] == "INVALID_FIELD", f"invalid server join field code mismatch: {invalid_server_join_field_payload['error']['code']}"
 assert blank_server_join_player_id_payload["ok"] is False, "blank server join playerId payload should be failure"
 assert blank_server_join_player_id_payload["error"]["code"] == "INVALID_FIELD", f"blank server join playerId code mismatch: {blank_server_join_player_id_payload['error']['code']}"
+assert invalid_server_description_type_payload["ok"] is False, "invalid server description-type payload should be failure"
+assert invalid_server_description_type_payload["error"]["code"] == "INVALID_FIELD", (
+    f"invalid server description-type code mismatch: {invalid_server_description_type_payload['error']['code']}"
+)
+assert invalid_server_maxplayers_type_payload["ok"] is False, "invalid server maxPlayers-type payload should be failure"
+assert invalid_server_maxplayers_type_payload["error"]["code"] == "INVALID_FIELD", (
+    f"invalid server maxPlayers-type code mismatch: {invalid_server_maxplayers_type_payload['error']['code']}"
+)
 assert mismatch_join_payload["ok"] is False, "session/server mismatch payload should be failure"
 assert mismatch_join_payload["error"]["code"] == "SESSION_SERVER_MISMATCH", f"session/server mismatch error mismatch: {mismatch_join_payload['error']['code']}"
 
