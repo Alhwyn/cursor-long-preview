@@ -235,6 +235,41 @@ describe("RPC API integration (fallback mode)", () => {
     expect(joinPayload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("blank join identifiers return INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const blankSessionJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: "   ", playerName: "BlankSession" }),
+    });
+    const blankSessionJoinPayload = await blankSessionJoin.json();
+    expect(blankSessionJoin.status).toBe(400);
+    expect(blankSessionJoinPayload.ok).toBe(false);
+    expect(blankSessionJoinPayload.error.code).toBe("INVALID_FIELD");
+
+    const blankServerJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverId: "   ", playerName: "BlankServerId" }),
+    });
+    const blankServerJoinPayload = await blankServerJoin.json();
+    expect(blankServerJoin.status).toBe(400);
+    expect(blankServerJoinPayload.ok).toBe(false);
+    expect(blankServerJoinPayload.error.code).toBe("INVALID_FIELD");
+
+    const blankPlayerIdJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: "   ", playerName: "BlankPlayerId" }),
+    });
+    const blankPlayerIdJoinPayload = await blankPlayerIdJoin.json();
+    expect(blankPlayerIdJoin.status).toBe(400);
+    expect(blankPlayerIdJoinPayload.ok).toBe(false);
+    expect(blankPlayerIdJoinPayload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("invalid action payload field types return INVALID_FIELD", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -277,6 +312,21 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackInvalidTarget.status).toBe(400);
     expect(attackInvalidTargetPayload.ok).toBe(false);
     expect(attackInvalidTargetPayload.error.code).toBe("INVALID_FIELD");
+
+    const attackBlankTarget = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: "   " },
+      }),
+    });
+    const attackBlankTargetPayload = await attackBlankTarget.json();
+
+    expect(attackBlankTarget.status).toBe(400);
+    expect(attackBlankTargetPayload.ok).toBe(false);
+    expect(attackBlankTargetPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("fractional zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
@@ -572,6 +622,28 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observeResponse.status).toBe(404);
     expect(observePayload.ok).toBe(false);
     expect(observePayload.error.code).toBe("PLAYER_NOT_FOUND");
+  });
+
+  test("observe with blank player query returns INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ObserverBlankPlayer" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=%20%20%20`,
+    );
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(400);
+    expect(observePayload.ok).toBe(false);
+    expect(observePayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("state and observe reject unknown sessions", async () => {
@@ -1181,6 +1253,17 @@ describe("RPC API integration (fallback mode)", () => {
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_FIELD");
+
+    const blankIdResponse = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: "   ", playerName: "InvalidBlankPlayerId" }),
+    });
+    const blankIdPayload = await blankIdResponse.json();
+
+    expect(blankIdResponse.status).toBe(400);
+    expect(blankIdPayload.ok).toBe(false);
+    expect(blankIdPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("servers endpoint reports disabled mode without Supabase env", async () => {

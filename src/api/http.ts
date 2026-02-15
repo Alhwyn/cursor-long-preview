@@ -93,6 +93,20 @@ export function optionalString(value: unknown, field: string): string | undefine
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function optionalNonEmptyString(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new HttpError(400, "INVALID_FIELD", `Field "${field}" must be a string when provided.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new HttpError(400, "INVALID_FIELD", `Field "${field}" must be a non-empty string when provided.`);
+  }
+  return trimmed;
+}
+
 export function optionalNumber(value: unknown, field: string): number | undefined {
   if (value === undefined || value === null) {
     return undefined;

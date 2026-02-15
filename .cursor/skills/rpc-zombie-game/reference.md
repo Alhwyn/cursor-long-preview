@@ -82,6 +82,7 @@ curl -s -X POST http://127.0.0.1:3000/api/servers/<SERVER_ID>/join \
 - `SESSION_SERVER_MISMATCH` -> remove conflicting `serverId` or rejoin via the correct server flow.
 - `PLAYER_NOT_FOUND` -> player/session mismatch; refresh from join response.
 - `INVALID_ZOMBIE_COUNT` -> retry join with integer `zombieCount` in `[1, 32]`.
+- `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `targetId`) are non-empty strings when supplied.
 - `TARGET_OUT_OF_RANGE` -> move first.
 - `ATTACK_COOLDOWN` -> move or wait one turn.
 - `MOVE_BLOCKED` / `MOVE_OCCUPIED` -> pick alternate direction.

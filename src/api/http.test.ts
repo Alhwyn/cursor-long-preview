@@ -4,6 +4,7 @@ import {
   error,
   HttpError,
   ok,
+  optionalNonEmptyString,
   optionalNumber,
   optionalString,
   parseJsonBody,
@@ -79,6 +80,15 @@ describe("api/http helpers", () => {
     expect(optionalNumber(undefined, "count")).toBeUndefined();
     expect(optionalNumber(3, "count")).toBe(3);
     expect(() => optionalNumber(NaN, "count")).toThrow('Field "count" must be a finite number');
+  });
+
+  test("optionalNonEmptyString rejects blank values when provided", () => {
+    expect(optionalNonEmptyString(undefined, "session")).toBeUndefined();
+    expect(optionalNonEmptyString(" abc ", "session")).toBe("abc");
+    expect(() => optionalNonEmptyString("   ", "session")).toThrow(
+      'Field "session" must be a non-empty string when provided',
+    );
+    expect(() => optionalNonEmptyString(1, "session")).toThrow('Field "session" must be a string');
   });
 
   test("queryString requires non-empty query values", () => {

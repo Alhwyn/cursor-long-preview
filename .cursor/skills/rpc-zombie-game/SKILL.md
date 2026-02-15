@@ -36,6 +36,7 @@ Drive the server-authoritative simulation through API actions without direct sta
 - If calling `POST /api/game/join` with `serverId`, the server must exist, else `SERVER_NOT_FOUND`.
 - If calling `POST /api/game/join` with both `session` and `serverId`, they must match, else `SESSION_SERVER_MISMATCH`.
 - If target session belongs to a lobby server at max capacity, join returns `SERVER_FULL`.
+- Optional identifiers (`session`, `serverId`, `playerId`, observe `player`, attack `targetId`) must be non-empty strings when provided; blank strings return `INVALID_FIELD`.
 
 ## Auth Behavior
 

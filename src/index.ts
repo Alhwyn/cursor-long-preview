@@ -4,6 +4,7 @@ import {
   asHttpError,
   HttpError,
   ok,
+  optionalNonEmptyString,
   optionalNumber,
   optionalString,
   parseJsonBody,
@@ -112,7 +113,7 @@ function parseActionBody(payload: Record<string, unknown>): Action {
   if (actionType === "attack") {
     return {
       type: "attack",
-      targetId: optionalString(payload.targetId, "targetId"),
+      targetId: optionalNonEmptyString(payload.targetId, "targetId"),
     };
   }
 
@@ -122,10 +123,10 @@ function parseActionBody(payload: Record<string, unknown>): Action {
 async function createOrJoinGameSession(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
-  const existingSessionId = optionalString(body.session, "session");
-  const playerId = optionalString(body.playerId, "playerId");
+  const existingSessionId = optionalNonEmptyString(body.session, "session");
+  const playerId = optionalNonEmptyString(body.playerId, "playerId");
   const playerName = optionalString(body.playerName, "playerName");
-  const serverId = optionalString(body.serverId, "serverId");
+  const serverId = optionalNonEmptyString(body.serverId, "serverId");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
 
   try {
@@ -214,7 +215,7 @@ async function getGameStateBySession(request: Request): Promise<Response> {
 async function observeGameSession(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const sessionId = queryString(url, "session");
-  const requestedPlayerId = optionalString(url.searchParams.get("player"), "player");
+  const requestedPlayerId = optionalNonEmptyString(url.searchParams.get("player"), "player");
   const playerId = resolveObservationPlayerId(sessionId, requestedPlayerId);
 
   try {
@@ -329,7 +330,7 @@ async function joinLobbyServer(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
   const playerName = optionalString(body.playerName, "playerName");
-  const playerId = optionalString(body.playerId, "playerId");
+  const playerId = optionalNonEmptyString(body.playerId, "playerId");
 
   const server = await getServer(serverId);
   if (!server) {

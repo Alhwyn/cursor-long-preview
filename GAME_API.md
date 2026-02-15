@@ -49,6 +49,7 @@ Request:
 
 `zombieCount` must be an integer from `1` to `32`.
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
+If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings.
 If `playerId` is omitted:
 - new session defaults to `p-<sessionId>-1`
 - subsequent joins default to `p-2`, `p-3`, ...
@@ -101,6 +102,7 @@ Response:
 Get compact, player-centric observation payload.
 
 `player` is optional; when omitted, first player in session is used.
+If provided, `player` must be a non-empty string.
 
 Observation shape:
 
@@ -158,7 +160,7 @@ Request:
 Action schema:
 
 - `{"type":"move","direction":"up"|"down"|"left"|"right"}`
-- `{"type":"attack","targetId":"optional-zombie-id"}`
+- `{"type":"attack","targetId":"optional-zombie-id"}` (`targetId` must be non-empty when provided)
 - `{"type":"wait"}`
 
 Response:
@@ -275,6 +277,8 @@ Request:
   "playerId": "optional"
 }
 ```
+
+`playerId` must be a non-empty string when provided.
 
 Response:
 
