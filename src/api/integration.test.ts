@@ -915,6 +915,26 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("MISSING_QUERY");
   });
 
+  test("state trims session query value", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "StateTrimUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const stateResponse = await fetch(`${baseUrl}/api/game/state?session=${encodeURIComponent(`  ${sessionId}  `)}`);
+    const statePayload = await stateResponse.json();
+
+    expect(stateResponse.status).toBe(200);
+    expect(statePayload.ok).toBe(true);
+    expect(statePayload.data.sessionId).toBe(sessionId);
+  });
+
   test("tick without session field returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -974,6 +994,49 @@ describe("RPC API integration (fallback mode)", () => {
     expect(tickBlankSession.status).toBe(400);
     expect(tickBlankSessionPayload.ok).toBe(false);
     expect(tickBlankSessionPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("action and tick trim required identifiers", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimActionTickUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: `  ${sessionId}  `,
+        playerId: `  ${playerId}  `,
+        action: { type: "wait" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(200);
+    expect(actionPayload.ok).toBe(true);
+    expect(actionPayload.data.sessionId).toBe(sessionId);
+    expect(actionPayload.data.playerId).toBe(playerId);
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: `  ${sessionId}  `,
+      }),
+    });
+    const tickPayload = await tickResponse.json();
+
+    expect(tickResponse.status).toBe(200);
+    expect(tickPayload.ok).toBe(true);
+    expect(tickPayload.data.sessionId).toBe(sessionId);
   });
 
   test("invalid action type returns 400", async () => {
