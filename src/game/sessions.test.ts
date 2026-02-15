@@ -76,4 +76,31 @@ describe("session manager", () => {
     const created = createSession({ playerName: "Scout" });
     expect(() => observeSession(created.session.sessionId, "ghost-player")).toThrow(GameRuleError);
   });
+
+  test("manual tick is rejected when game is already completed", () => {
+    const created = createSession({ playerName: "Runner-1" });
+    updateSession(created.session.sessionId, state => ({
+      ...state,
+      status: "lost",
+    }));
+
+    expect(() => stepSession(created.session.sessionId)).toThrow(GameRuleError);
+  });
+
+  test("action is rejected when player is dead", () => {
+    const created = createSession({ playerName: "Runner-1" });
+    updateSession(created.session.sessionId, state => ({
+      ...state,
+      players: {
+        ...state.players,
+        [created.player.id]: {
+          ...state.players[created.player.id]!,
+          alive: false,
+          hp: 0,
+        },
+      },
+    }));
+
+    expect(() => performAction(created.session.sessionId, created.player.id, { type: "wait" })).toThrow(GameRuleError);
+  });
 });
