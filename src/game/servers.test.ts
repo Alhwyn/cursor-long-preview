@@ -70,6 +70,23 @@ describe("local lobby server store", () => {
     expect(created.description).toBeUndefined();
   });
 
+  test("listServers returns servers ordered by creation time", async () => {
+    const first = await createServer({
+      name: "First Lobby",
+      maxPlayers: 2,
+    });
+    await Bun.sleep(2);
+    const second = await createServer({
+      name: "Second Lobby",
+      maxPlayers: 2,
+    });
+
+    const listed = await listServers();
+    expect(listed).toHaveLength(2);
+    expect(listed[0]?.id).toBe(first.id);
+    expect(listed[1]?.id).toBe(second.id);
+  });
+
   test("active session tracking integrates resolver player count", async () => {
     const created = await createServer({
       name: "Session Lobby",
@@ -125,5 +142,19 @@ describe("local lobby server store", () => {
 
     expect(server).toBeDefined();
     expect(server?.currentPlayers).toBe(0);
+  });
+
+  test("getServer reflects resolver player count for active session", async () => {
+    const created = await createServer({
+      name: "Resolved Lobby",
+      maxPlayers: 5,
+    });
+
+    configureServerPlayerCountResolver(sessionId => (sessionId === "session-resolved" ? 4 : 0));
+    setActiveSessionId(created.id, "session-resolved");
+
+    const fetched = await getServer(created.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched?.currentPlayers).toBe(4);
   });
 });
