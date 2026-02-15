@@ -1269,6 +1269,85 @@ describe("RPC API integration (fallback mode)", () => {
     expect(duplicatePayload.error.code).toBe("PLAYER_EXISTS");
   });
 
+  test("server join rejects duplicate playerId in active session", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Duplicate Join Lobby",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "dupe-player",
+        playerName: "Dupe-A",
+      }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+
+    expect(firstJoin.status).toBe(200);
+    expect(firstJoinPayload.ok).toBe(true);
+
+    const secondJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "dupe-player",
+        playerName: "Dupe-B",
+      }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+
+    expect(secondJoin.status).toBe(409);
+    expect(secondJoinPayload.ok).toBe(false);
+    expect(secondJoinPayload.error.code).toBe("PLAYER_EXISTS");
+  });
+
+  test("server join with blank playerName falls back to Survivor naming", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Blank Name Join Lobby",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Host" }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+    expect(firstJoin.status).toBe(200);
+    expect(firstJoinPayload.ok).toBe(true);
+
+    const secondJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "   " }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+
+    expect(secondJoin.status).toBe(200);
+    expect(secondJoinPayload.ok).toBe(true);
+    expect(secondJoinPayload.data.playerName).toBe("Survivor-2");
+  });
+
   test("joining unknown server returns 404", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
