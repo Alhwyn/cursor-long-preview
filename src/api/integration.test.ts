@@ -128,6 +128,48 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_DIRECTION");
   });
+
+  test("server join enforces max player capacity", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Capacity Test",
+        maxPlayers: 2,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    expect(createResponse.status).toBe(201);
+    expect(createPayload.ok).toBe(true);
+    const serverId = createPayload.data.server.id as string;
+
+    const join1 = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Player-1" }),
+    });
+    expect(join1.status).toBe(200);
+
+    const join2 = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Player-2" }),
+    });
+    expect(join2.status).toBe(200);
+
+    const join3 = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Player-3" }),
+    });
+    const join3Payload = await join3.json();
+    expect(join3.status).toBe(409);
+    expect(join3Payload.ok).toBe(false);
+    expect(join3Payload.error.code).toBe("SERVER_FULL");
+  });
 });
 
 describe("RPC API integration (supabase auth gate)", () => {
