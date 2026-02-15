@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addPlayerToState, applyAction, createInitialGameState, GameRuleError, tickGame, toObservation } from "./engine";
+import { addPlayerToState, applyAction, createInitialGameState, createInitialMap, GameRuleError, tickGame, toObservation } from "./engine";
 import type { GameState } from "./types";
 
 function makeState(): GameState {
@@ -18,6 +18,8 @@ describe("engine", () => {
     const next = applyAction(state, "p-1", { type: "move", direction: "right" });
     expect(next.tick).toBe(1);
     expect(next.players["p-1"]?.position).toEqual({ x: 3, y: 2 });
+    expect(state.players["p-1"]?.position).toEqual({ x: 2, y: 2 });
+    expect(next.updatedAt).toBe(state.updatedAt + 1);
   });
 
   test("move into wall throws conflict error", () => {
@@ -51,6 +53,7 @@ describe("engine", () => {
     state.zombies["z-1"]!.position = { x: 4, y: 2 };
     const ticked = tickGame(state);
     expect(ticked.zombies["z-1"]?.position).toEqual({ x: 3, y: 2 });
+    expect(ticked.updatedAt).toBe(state.updatedAt + 1);
   });
 
   test("game status flips to won when final zombie dies", () => {
@@ -122,5 +125,21 @@ describe("engine", () => {
         zombieCount: 1.5,
       }),
     ).toThrow("zombieCount must be an integer");
+  });
+
+  test("createInitialMap is deterministic and walls surround boundaries", () => {
+    const left = createInitialMap();
+    const right = createInitialMap();
+
+    expect(left).toEqual(right);
+    expect(left.tiles.find(tile => tile.x === 0 && tile.y === 0)?.type).toBe("wall");
+    expect(left.tiles.find(tile => tile.x === left.width - 1 && tile.y === left.height - 1)?.type).toBe("wall");
+    expect(left.tiles.find(tile => tile.x === 1 && tile.y === 1)?.type).toBe("grass");
+  });
+
+  test("tick is rejected after game completion", () => {
+    const state = makeState();
+    state.status = "lost";
+    expect(() => tickGame(state)).toThrow("already completed");
   });
 });
