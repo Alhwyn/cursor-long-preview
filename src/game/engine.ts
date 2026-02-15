@@ -54,8 +54,8 @@ const DEFAULT_ZOMBIE_POSITIONS: Vec2[] = [
   { x: 12, y: 12 },
 ];
 
-function nowTimestamp(): number {
-  return Date.now();
+function nextStateTimestamp(previous: number): number {
+  return previous + 1;
 }
 
 function cloneState(state: GameState): GameState {
@@ -403,7 +403,7 @@ export function addPlayerToState({ state, playerId, playerName }: AddPlayerInput
   const nextState = cloneState(state);
   const player = createPlayer(nextPlayerId, nextPlayerName, spawn);
   nextState.players[player.id] = player;
-  nextState.updatedAt = nowTimestamp();
+  nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
   updateGameStatus(nextState);
   return { state: nextState, player };
 }
@@ -415,7 +415,7 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
   const playerName = input.playerName?.trim() || "Survivor-1";
   const zombieCount = Math.max(1, input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length);
   const map = createInitialMap();
-  const createdAt = nowTimestamp();
+  const createdAt = 0;
 
   const player = createPlayer(playerId, playerName, PLAYER_START);
   const zombies: Record<string, Zombie> = {};
@@ -453,7 +453,7 @@ export function tickGame(state: GameState): GameState {
   nextState.tick += 1;
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
-  nextState.updatedAt = nowTimestamp();
+  nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
   return nextState;
 }
 
@@ -464,7 +464,7 @@ export function applyAction(state: GameState, playerId: string, action: Action):
   nextState.tick += 1;
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
-  nextState.updatedAt = nowTimestamp();
+  nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
   return nextState;
 }
 
