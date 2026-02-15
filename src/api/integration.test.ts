@@ -356,6 +356,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("out-of-range attack returns conflict", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "OutOfRangeAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "z-1" },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(409);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+  });
+
   test("non-object action payload returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
