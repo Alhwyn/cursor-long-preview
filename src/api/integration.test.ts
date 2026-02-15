@@ -1506,6 +1506,43 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.data.server.maxPlayers).toBe(4);
   });
 
+  test("servers list preserves creation order in fallback mode", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const firstCreate = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Ordered Server A",
+      }),
+    });
+    const firstPayload = await firstCreate.json();
+    const firstId = firstPayload.data.server.id as string;
+
+    await Bun.sleep(2);
+
+    const secondCreate = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Ordered Server B",
+      }),
+    });
+    const secondPayload = await secondCreate.json();
+    const secondId = secondPayload.data.server.id as string;
+
+    const listResponse = await fetch(`${baseUrl}/api/servers`);
+    const listPayload = await listResponse.json();
+    const serverIds = (listPayload.data.servers as Array<{ id: string }>).map(server => server.id);
+
+    expect(listResponse.status).toBe(200);
+    expect(listPayload.ok).toBe(true);
+    expect(serverIds.indexOf(firstId)).toBeGreaterThanOrEqual(0);
+    expect(serverIds.indexOf(secondId)).toBeGreaterThanOrEqual(0);
+    expect(serverIds.indexOf(firstId)).toBeLessThan(serverIds.indexOf(secondId));
+  });
+
   test("servers list reflects current player counts for active server session", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
