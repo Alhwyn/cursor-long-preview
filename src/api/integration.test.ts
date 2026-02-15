@@ -129,6 +129,45 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_DIRECTION");
   });
 
+  test("move blocked by map wall returns conflict", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "WallRunner" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const left1 = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "move", direction: "left" },
+      }),
+    });
+    expect(left1.status).toBe(200);
+
+    const left2 = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "move", direction: "left" },
+      }),
+    });
+    const left2Payload = await left2.json();
+    expect(left2.status).toBe(409);
+    expect(left2Payload.ok).toBe(false);
+    expect(left2Payload.error.code).toBe("MOVE_BLOCKED");
+  });
+
   test("invalid zombieCount is rejected with 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
