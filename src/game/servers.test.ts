@@ -49,6 +49,27 @@ describe("local lobby server store", () => {
     ).rejects.toThrow(GameRuleError);
   });
 
+  test("create server trims name and description and applies defaults", async () => {
+    const created = await createServer({
+      name: "  Trimmed Lobby  ",
+      description: "  Relaxed run  ",
+    });
+
+    expect(created.name).toBe("Trimmed Lobby");
+    expect(created.description).toBe("Relaxed run");
+    expect(created.maxPlayers).toBe(4);
+  });
+
+  test("blank description normalizes to undefined", async () => {
+    const created = await createServer({
+      name: "No Description Lobby",
+      description: "   ",
+      maxPlayers: 2,
+    });
+
+    expect(created.description).toBeUndefined();
+  });
+
   test("active session tracking integrates resolver player count", async () => {
     const created = await createServer({
       name: "Session Lobby",
