@@ -293,3 +293,9 @@ export async function recordSnapshot(input: SnapshotInput): Promise<void> {
     throw new GameRuleError("SUPABASE_SNAPSHOT_FAILED", `Failed to persist snapshot: ${error.message}`);
   }
 }
+
+export function clearLocalServersForTests(): void {
+  localServerStore.clear();
+  activeSessionByServerId.clear();
+  sessionPlayerCountResolver = null;
+}
