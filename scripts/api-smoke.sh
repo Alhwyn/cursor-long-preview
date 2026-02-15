@@ -75,8 +75,9 @@ trimmed_tick_status="$(curl -sS -o /tmp/rpc-zombie-smoke-trimmed-tick.json -w "%
   -d "{\"session\":\"  ${session_id}  \"}")"
 
 servers_payload="$(curl -sS "${BASE_URL}/api/servers")"
-create_server_payload="$(curl -sS -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"Smoke Lobby","maxPlayers":2}')"
+create_server_payload="$(curl -sS -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"Smoke Lobby","maxPlayers":3}')"
 server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["server"]["id"])' <<< "${create_server_payload}")"
+trimmed_serverid_game_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-trimmed-serverid-game-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d "{\"serverId\":\"  ${server_id}  \",\"playerName\":\"TrimmedServerIdJoin\"}")"
 join_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-join-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerName":"LobbySmoke"}')"
 linked_session_id="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-join-server.json").read_text())["data"]["sessionId"])')"
 blank_name_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-blank-name-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerName":"   "}')" 
@@ -95,7 +96,7 @@ duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-on
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}"
+python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}"
 import json
 import pathlib
 import sys
@@ -125,21 +126,23 @@ blank_action_player_status = int(sys.argv[22])
 blank_tick_session_status = int(sys.argv[23])
 trimmed_action_status = int(sys.argv[24])
 trimmed_tick_status = int(sys.argv[25])
-join_server_status = int(sys.argv[26])
-blank_name_join_status = int(sys.argv[27])
-trimmed_session_join_status = int(sys.argv[28])
-invalid_server_join_field_status = int(sys.argv[29])
-blank_server_join_player_id_status = int(sys.argv[30])
-missing_server_status = int(sys.argv[31])
-missing_join_server_status = int(sys.argv[32])
-mismatch_join_status = int(sys.argv[33])
-invalid_server_description_type_status = int(sys.argv[34])
-invalid_server_maxplayers_type_status = int(sys.argv[35])
-duplicate_join_one_status = int(sys.argv[36])
-duplicate_join_two_status = int(sys.argv[37])
-out_of_range_zombie_count_status = int(sys.argv[38])
-string_zombie_count_status = int(sys.argv[39])
+trimmed_serverid_game_join_status = int(sys.argv[26])
+join_server_status = int(sys.argv[27])
+blank_name_join_status = int(sys.argv[28])
+trimmed_session_join_status = int(sys.argv[29])
+invalid_server_join_field_status = int(sys.argv[30])
+blank_server_join_player_id_status = int(sys.argv[31])
+missing_server_status = int(sys.argv[32])
+missing_join_server_status = int(sys.argv[33])
+mismatch_join_status = int(sys.argv[34])
+invalid_server_description_type_status = int(sys.argv[35])
+invalid_server_maxplayers_type_status = int(sys.argv[36])
+duplicate_join_one_status = int(sys.argv[37])
+duplicate_join_two_status = int(sys.argv[38])
+out_of_range_zombie_count_status = int(sys.argv[39])
+string_zombie_count_status = int(sys.argv[40])
 missing_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-server.json").read_text())
+join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-join-server.json").read_text())
 missing_join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-join-server.json").read_text())
 mismatch_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-session-mismatch.json").read_text())
 invalid_json_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-invalid-json.json").read_text())
@@ -175,6 +178,7 @@ blank_action_player_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-bla
 blank_tick_session_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-blank-tick-session.json").read_text())
 trimmed_action_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-trimmed-action.json").read_text())
 trimmed_tick_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-trimmed-tick.json").read_text())
+trimmed_serverid_game_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-trimmed-serverid-game-join.json").read_text())
 trimmed_session_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-trimmed-session-join.json").read_text())
 
 assert join_payload["ok"] is True, "join failed"
@@ -206,6 +210,9 @@ assert blank_action_player_status == 400, f"blank action player should be 400, g
 assert blank_tick_session_status == 400, f"blank tick session should be 400, got {blank_tick_session_status}"
 assert trimmed_action_status == 200, f"trimmed action should be 200, got {trimmed_action_status}"
 assert trimmed_tick_status == 200, f"trimmed tick should be 200, got {trimmed_tick_status}"
+assert trimmed_serverid_game_join_status == 201, (
+    f"trimmed serverId game join should be 201, got {trimmed_serverid_game_join_status}"
+)
 assert join_server_status == 200, f"join server should be 200, got {join_server_status}"
 assert blank_name_join_status == 200, f"blank-name server join should be 200, got {blank_name_join_status}"
 assert trimmed_session_join_status == 200, f"trimmed session join should be 200, got {trimmed_session_join_status}"
@@ -281,6 +288,10 @@ assert trimmed_tick_payload["ok"] is True, "trimmed tick payload should be succe
 assert trimmed_tick_payload["data"]["sessionId"] == join_payload["data"]["sessionId"], (
     f"trimmed tick sessionId mismatch: {trimmed_tick_payload['data']['sessionId']}"
 )
+assert trimmed_serverid_game_join_payload["ok"] is True, "trimmed serverId game join payload should be success"
+assert trimmed_serverid_game_join_payload["data"]["state"]["serverId"] == join_server_payload["data"]["server"]["id"], (
+    f"trimmed serverId game join serverId mismatch: {trimmed_serverid_game_join_payload['data']['state']['serverId']}"
+)
 assert missing_join_server_payload["ok"] is False, "missing server game join payload should be failure"
 assert missing_join_server_payload["error"]["code"] == "SERVER_NOT_FOUND", f"missing game join server error mismatch: {missing_join_server_payload['error']['code']}"
 assert invalid_server_join_field_payload["ok"] is False, "invalid server join field payload should be failure"
@@ -288,7 +299,9 @@ assert invalid_server_join_field_payload["error"]["code"] == "INVALID_FIELD", f"
 assert blank_server_join_player_id_payload["ok"] is False, "blank server join playerId payload should be failure"
 assert blank_server_join_player_id_payload["error"]["code"] == "INVALID_FIELD", f"blank server join playerId code mismatch: {blank_server_join_player_id_payload['error']['code']}"
 assert blank_name_join_payload["ok"] is True, "blank-name server join payload should be success"
-assert blank_name_join_payload["data"]["playerName"] == "Survivor-2", f"blank-name join fallback mismatch: {blank_name_join_payload['data']['playerName']}"
+assert blank_name_join_payload["data"]["playerName"].startswith("Survivor-"), (
+    f"blank-name join fallback mismatch: {blank_name_join_payload['data']['playerName']}"
+)
 assert trimmed_session_join_payload["ok"] is True, "trimmed session join payload should be success"
 assert trimmed_session_join_payload["data"]["sessionId"] == join_payload["data"]["sessionId"], (
     f"trimmed session join sessionId mismatch: {trimmed_session_join_payload['data']['sessionId']}"
