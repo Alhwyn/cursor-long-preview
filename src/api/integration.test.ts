@@ -167,6 +167,44 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("SERVER_NOT_FOUND");
   });
 
+  test("joining existing server session honors server max player limit", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createServerResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Session Capacity",
+        maxPlayers: 1,
+      }),
+    });
+    const createServerPayload = await createServerResponse.json();
+    const serverId = createServerPayload.data.server.id as string;
+
+    const joinServerResponse = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Host" }),
+    });
+    const joinServerPayload = await joinServerResponse.json();
+    const sessionId = joinServerPayload.data.sessionId as string;
+
+    const secondJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerName: "Guest",
+      }),
+    });
+    const secondJoinPayload = await secondJoinResponse.json();
+
+    expect(secondJoinResponse.status).toBe(409);
+    expect(secondJoinPayload.ok).toBe(false);
+    expect(secondJoinPayload.error.code).toBe("SERVER_FULL");
+  });
+
   test("observe defaults to first player when player query omitted", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

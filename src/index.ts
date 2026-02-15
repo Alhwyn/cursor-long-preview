@@ -130,6 +130,17 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
 
   try {
     if (existingSessionId) {
+      const existingSession = getSession(existingSessionId);
+      if (existingSession?.serverId) {
+        const linkedServer = await getServer(existingSession.serverId);
+        if (linkedServer) {
+          const currentPlayers = Object.keys(existingSession.state.players).length;
+          if (currentPlayers >= linkedServer.maxPlayers) {
+            throw new GameRuleError("SERVER_FULL", `Server "${linkedServer.name}" is full.`);
+          }
+        }
+      }
+
       const { session, player } = joinSession({
         sessionId: existingSessionId,
         playerId,
