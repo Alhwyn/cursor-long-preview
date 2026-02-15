@@ -165,6 +165,39 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondPayload.data.playerId).toBe("custom-player-2");
   });
 
+  test("join trims explicit playerId values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "  trimmed-player-1  ",
+        playerName: "TrimOne",
+      }),
+    });
+    const firstPayload = await firstJoin.json();
+    expect(firstJoin.status).toBe(201);
+    expect(firstPayload.ok).toBe(true);
+    expect(firstPayload.data.playerId).toBe("trimmed-player-1");
+
+    const sessionId = firstPayload.data.sessionId as string;
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: "  trimmed-player-2  ",
+        playerName: "TrimTwo",
+      }),
+    });
+    const secondPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(200);
+    expect(secondPayload.ok).toBe(true);
+    expect(secondPayload.data.playerId).toBe("trimmed-player-2");
+  });
+
   test("joining session with blank playerName falls back to Survivor naming", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -999,6 +1032,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
   });
 
+  test("attack targetId is trimmed before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimTargetAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "  z-1  " },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(409);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+  });
+
   test("attack cooldown is enforced once in range", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1564,6 +1624,36 @@ describe("RPC API integration (fallback mode)", () => {
     expect(blankIdResponse.status).toBe(400);
     expect(blankIdPayload.ok).toBe(false);
     expect(blankIdPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("server join trims explicit playerId values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Trimmed Server Join Id",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const joinResponse = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "  trimmed-lobby-player  ",
+        playerName: "TrimLobby",
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    expect(joinResponse.status).toBe(200);
+    expect(joinPayload.ok).toBe(true);
+    expect(joinPayload.data.playerId).toBe("trimmed-lobby-player");
   });
 
   test("servers endpoint reports disabled mode without Supabase env", async () => {
