@@ -1,0 +1,304 @@
+# RPC Zombie Game API
+
+This service is a **server-authoritative** zombie game simulation.  
+Clients send intents; the server validates, mutates canonical state, advances ticks, and returns snapshots.
+
+## Response Envelope
+
+All API responses use:
+
+```json
+{
+  "ok": true,
+  "data": {}
+}
+```
+
+or
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable explanation",
+    "details": {}
+  }
+}
+```
+
+---
+
+## Game Endpoints
+
+### `POST /api/game/join`
+
+Create a new session (or join existing session).
+
+Request:
+
+```json
+{
+  "playerName": "Scout",
+  "session": "optional-existing-session-id",
+  "playerId": "optional-player-id",
+  "serverId": "optional-server-id",
+  "zombieCount": 4
+}
+```
+
+Response `201` (new) / `200` (join existing):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionId": "uuid",
+    "playerId": "uuid",
+    "playerName": "Scout",
+    "state": {},
+    "observation": {}
+  }
+}
+```
+
+---
+
+### `GET /api/game/state?session=<sessionId>`
+
+Get canonical session state.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionId": "uuid",
+    "state": {
+      "tick": 3,
+      "status": "active"
+    }
+  }
+}
+```
+
+---
+
+### `GET /api/game/observe?session=<sessionId>&player=<playerId>`
+
+Get compact, player-centric observation payload.
+
+`player` is optional; when omitted, first player in session is used.
+
+Observation shape:
+
+```json
+{
+  "sessionId": "uuid",
+  "playerId": "uuid",
+  "tick": 3,
+  "status": "active",
+  "self": {
+    "id": "uuid",
+    "kind": "player",
+    "name": "Scout",
+    "x": 2,
+    "y": 2,
+    "hp": 108,
+    "maxHp": 120,
+    "alive": true
+  },
+  "nearestZombie": {
+    "id": "z-2",
+    "distance": 5,
+    "dx": 4,
+    "dy": 1,
+    "x": 6,
+    "y": 3,
+    "hp": 70,
+    "alive": true
+  },
+  "players": [],
+  "zombies": [],
+  "entities": []
+}
+```
+
+---
+
+### `POST /api/game/action`
+
+Apply action for a specific player.
+
+Request:
+
+```json
+{
+  "session": "uuid",
+  "playerId": "uuid",
+  "action": {
+    "type": "move",
+    "direction": "up"
+  }
+}
+```
+
+Action schema:
+
+- `{"type":"move","direction":"up"|"down"|"left"|"right"}`
+- `{"type":"attack","targetId":"optional-zombie-id"}`
+- `{"type":"wait"}`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionId": "uuid",
+    "playerId": "uuid",
+    "state": {},
+    "observation": {}
+  }
+}
+```
+
+---
+
+### `POST /api/game/tick`
+
+Manual world step without player action.
+
+Request:
+
+```json
+{
+  "session": "uuid"
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionId": "uuid",
+    "state": {}
+  }
+}
+```
+
+---
+
+## Lobby / Server Endpoints
+
+### `GET /api/servers`
+
+List public servers with current player counts.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "mode": "disabled",
+    "servers": []
+  }
+}
+```
+
+`mode`:
+- `disabled` => local in-memory fallback mode
+- `enabled` => Supabase-backed metadata mode
+
+---
+
+### `POST /api/servers`
+
+Create server metadata.
+
+Auth rules:
+- Supabase **disabled**: no auth required.
+- Supabase **enabled**: `Authorization: Bearer <jwt>` required.
+
+Request:
+
+```json
+{
+  "name": "Zombie Meadow",
+  "description": "Casual run",
+  "maxPlayers": 4
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "mode": "disabled",
+    "server": {
+      "id": "srv-...",
+      "name": "Zombie Meadow",
+      "maxPlayers": 4
+    }
+  }
+}
+```
+
+---
+
+### `POST /api/servers/:id/join`
+
+Join server's active game session (creates one if needed).
+
+Request:
+
+```json
+{
+  "playerName": "Scout",
+  "playerId": "optional"
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "server": {},
+    "sessionId": "uuid",
+    "playerId": "uuid",
+    "playerName": "Scout",
+    "state": {},
+    "observation": {}
+  }
+}
+```
+
+---
+
+## Common Error Codes
+
+- `INVALID_JSON`, `INVALID_BODY`, `INVALID_FIELD`
+- `MISSING_QUERY`, `INVALID_ACTION`, `INVALID_DIRECTION`
+- `SESSION_NOT_FOUND`, `PLAYER_NOT_FOUND`, `TARGET_NOT_FOUND`, `SERVER_NOT_FOUND`
+- `PLAYER_DEAD`, `MOVE_BLOCKED`, `MOVE_OCCUPIED`, `TARGET_OUT_OF_RANGE`, `ATTACK_COOLDOWN`, `SERVER_FULL`
+- `UNAUTHORIZED`, `FORBIDDEN`
+
+---
+
+## Claude / Agent Play Loop (single session)
+
+1. `POST /api/game/join` → keep `sessionId` + `playerId`.
+2. `GET /api/game/observe?session=...&player=...` → inspect nearest zombie + HP.
+3. Decide action:
+   - if zombie adjacent => `attack`
+   - else move to reduce distance.
+4. `POST /api/game/action`.
+5. Repeat 2–4 until `status` is `won` or `lost`.
