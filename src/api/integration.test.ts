@@ -435,7 +435,40 @@ describe("RPC API integration (fallback mode)", () => {
     expect(moveLeftPayload.error.code).toBe("MOVE_OCCUPIED");
   });
 
-  test("invalid zombieCount is rejected with 400", async () => {
+  test("out-of-range zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const lowResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidZombieCountLow",
+        zombieCount: 0,
+      }),
+    });
+    const lowPayload = await lowResponse.json();
+
+    expect(lowResponse.status).toBe(400);
+    expect(lowPayload.ok).toBe(false);
+    expect(lowPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+
+    const highResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidZombieCountHigh",
+        zombieCount: 33,
+      }),
+    });
+    const highPayload = await highResponse.json();
+
+    expect(highResponse.status).toBe(400);
+    expect(highPayload.ok).toBe(false);
+    expect(highPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("non-number zombieCount is rejected with INVALID_FIELD", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
 
@@ -443,15 +476,15 @@ describe("RPC API integration (fallback mode)", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        playerName: "InvalidZombieCount",
-        zombieCount: 1.5,
+        playerName: "InvalidZombieCountType",
+        zombieCount: "4",
       }),
     });
     const payload = await response.json();
 
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
-    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+    expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
   test("joining game with unknown serverId returns 404", async () => {
