@@ -425,7 +425,11 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
   const serverId = input.serverId;
   const playerId = input.playerId ?? deterministicInitialPlayerId(sessionId);
   const playerName = input.playerName?.trim() || "Survivor-1";
-  const zombieCount = Math.max(1, input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length);
+  const requestedZombieCount = input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length;
+  if (!Number.isInteger(requestedZombieCount) || requestedZombieCount < 1 || requestedZombieCount > 32) {
+    throw new GameRuleError("INVALID_ZOMBIE_COUNT", "zombieCount must be an integer between 1 and 32.");
+  }
+  const zombieCount = requestedZombieCount;
   const map = createInitialMap();
   const createdAt = 0;
 

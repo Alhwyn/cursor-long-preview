@@ -114,4 +114,13 @@ describe("engine", () => {
     const joined = addPlayerToState({ state, playerName: "Tester-2" });
     expect(joined.player.id).toBe("p-2");
   });
+
+  test("invalid zombie count is rejected during bootstrap", () => {
+    expect(() =>
+      createInitialGameState({
+        sessionId: "alpha-invalid",
+        zombieCount: 1.5,
+      }),
+    ).toThrow("zombieCount must be an integer");
+  });
 });

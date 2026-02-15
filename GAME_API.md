@@ -47,6 +47,8 @@ Request:
 }
 ```
 
+`zombieCount` must be an integer from `1` to `32`.
+
 Response `201` (new) / `200` (join existing):
 
 ```json

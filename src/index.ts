@@ -56,6 +56,7 @@ function mapDomainError(errorValue: unknown): HttpError {
       return new HttpError(404, errorValue.code, errorValue.message);
     case "INVALID_SERVER_NAME":
     case "INVALID_MAX_PLAYERS":
+    case "INVALID_ZOMBIE_COUNT":
     case "NO_SPAWN":
       return new HttpError(400, errorValue.code, errorValue.message);
     case "GAME_COMPLETED":
