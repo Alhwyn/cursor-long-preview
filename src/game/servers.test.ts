@@ -74,4 +74,35 @@ describe("local lobby server store", () => {
     expect(fetched).toBeNull();
     expect(getActiveSessionId("missing-server")).toBeUndefined();
   });
+
+  test("setActiveSessionId updates local server metadata timestamp", async () => {
+    const created = await createServer({
+      name: "Timestamp Lobby",
+      maxPlayers: 4,
+    });
+
+    const before = await getServer(created.id);
+    expect(before).not.toBeNull();
+
+    await Bun.sleep(2);
+    setActiveSessionId(created.id, "session-ts-1");
+    const after = await getServer(created.id);
+
+    expect(after).not.toBeNull();
+    expect(after?.updatedAt).toBeGreaterThanOrEqual(before!.updatedAt);
+  });
+
+  test("currentPlayers defaults to zero when resolver is missing", async () => {
+    const created = await createServer({
+      name: "Resolverless Lobby",
+      maxPlayers: 2,
+    });
+
+    setActiveSessionId(created.id, "session-resolverless");
+    const listed = await listServers();
+    const server = listed.find(entry => entry.id === created.id);
+
+    expect(server).toBeDefined();
+    expect(server?.currentPlayers).toBe(0);
+  });
 });
