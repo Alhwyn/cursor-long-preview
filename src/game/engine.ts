@@ -210,6 +210,18 @@ function updateGameStatus(state: GameState): void {
   state.status = "active";
 }
 
+function deterministicInitialPlayerId(sessionId: string): string {
+  return `p-${sessionId}-1`;
+}
+
+function deterministicJoinPlayerId(state: GameState): string {
+  let index = Object.keys(state.players).length + 1;
+  while (state.players[`p-${index}`]) {
+    index += 1;
+  }
+  return `p-${index}`;
+}
+
 function createZombie(zombieId: string, position: Vec2): Zombie {
   return {
     id: zombieId,
@@ -369,7 +381,7 @@ export function addPlayerToState({ state, playerId, playerName }: AddPlayerInput
     throw new GameRuleError("GAME_COMPLETED", "Cannot join a completed game.");
   }
 
-  const nextPlayerId = playerId ?? crypto.randomUUID();
+  const nextPlayerId = playerId ?? deterministicJoinPlayerId(state);
   const nextPlayerName = playerName?.trim() || `Survivor-${Object.keys(state.players).length + 1}`;
   if (state.players[nextPlayerId]) {
     throw new GameRuleError("PLAYER_EXISTS", "Player already exists in this session.");
@@ -411,7 +423,7 @@ export function addPlayerToState({ state, playerId, playerName }: AddPlayerInput
 export function createInitialGameState(input: CreateStateInput): { state: GameState; player: Player } {
   const sessionId = input.sessionId;
   const serverId = input.serverId;
-  const playerId = input.playerId ?? crypto.randomUUID();
+  const playerId = input.playerId ?? deterministicInitialPlayerId(sessionId);
   const playerName = input.playerName?.trim() || "Survivor-1";
   const zombieCount = Math.max(1, input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length);
   const map = createInitialMap();

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyAction, createInitialGameState, GameRuleError, tickGame, toObservation } from "./engine";
+import { addPlayerToState, applyAction, createInitialGameState, GameRuleError, tickGame, toObservation } from "./engine";
 import type { GameState } from "./types";
 
 function makeState(): GameState {
@@ -99,5 +99,19 @@ describe("engine", () => {
     const left = applyAction(state, "p-1", { type: "move", direction: "right" });
     const right = applyAction(state, "p-1", { type: "move", direction: "right" });
     expect(left).toEqual(right);
+  });
+
+  test("initial state derives deterministic player id from session", () => {
+    const created = createInitialGameState({
+      sessionId: "alpha",
+      zombieCount: 1,
+    });
+    expect(created.player.id).toBe("p-alpha-1");
+  });
+
+  test("joining without explicit id uses deterministic sequence", () => {
+    const state = makeState();
+    const joined = addPlayerToState({ state, playerName: "Tester-2" });
+    expect(joined.player.id).toBe("p-2");
   });
 });
