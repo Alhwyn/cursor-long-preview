@@ -52,6 +52,7 @@ Request:
 If `serverId` is provided, it must match an existing server (`404 SERVER_NOT_FOUND` otherwise).
 
 If joining an existing `session` that is attached to a lobby server, server max-player limits are enforced (`409 SERVER_FULL`).
+If `session` and `serverId` are both provided, the session must belong to that server (`409 SESSION_SERVER_MISMATCH` otherwise).
 
 Response `201` (new) / `200` (join existing):
 

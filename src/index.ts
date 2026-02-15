@@ -131,6 +131,14 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
   try {
     if (existingSessionId) {
       const existingSession = getSession(existingSessionId);
+      if (serverId && existingSession && existingSession.serverId !== serverId) {
+        throw new HttpError(
+          409,
+          "SESSION_SERVER_MISMATCH",
+          `Session "${existingSessionId}" is not linked to server "${serverId}".`,
+        );
+      }
+
       if (existingSession?.serverId) {
         const linkedServer = await getServer(existingSession.serverId);
         if (linkedServer) {

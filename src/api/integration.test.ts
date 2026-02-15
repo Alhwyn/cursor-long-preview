@@ -205,6 +205,56 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondJoinPayload.error.code).toBe("SERVER_FULL");
   });
 
+  test("joining existing session with mismatched serverId returns 409", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createPrimary = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Primary Lobby",
+        maxPlayers: 3,
+      }),
+    });
+    const primaryPayload = await createPrimary.json();
+    const primaryServerId = primaryPayload.data.server.id as string;
+
+    const createSecondary = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Secondary Lobby",
+        maxPlayers: 3,
+      }),
+    });
+    const secondaryPayload = await createSecondary.json();
+    const secondaryServerId = secondaryPayload.data.server.id as string;
+
+    const joinPrimary = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(primaryServerId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Host" }),
+    });
+    const joinPrimaryPayload = await joinPrimary.json();
+    const sessionId = joinPrimaryPayload.data.sessionId as string;
+
+    const mismatchJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        serverId: secondaryServerId,
+        playerName: "Intruder",
+      }),
+    });
+    const mismatchPayload = await mismatchJoin.json();
+
+    expect(mismatchJoin.status).toBe(409);
+    expect(mismatchPayload.ok).toBe(false);
+    expect(mismatchPayload.error.code).toBe("SESSION_SERVER_MISMATCH");
+  });
+
   test("observe defaults to first player when player query omitted", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
