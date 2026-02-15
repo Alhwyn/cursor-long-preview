@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { clearSessions, createSession, getSession, joinSession, observeSession, performAction, stepSession } from "./sessions";
+import { GameRuleError } from "./engine";
+import {
+  clearSessions,
+  createSession,
+  getSession,
+  joinSession,
+  observeSession,
+  performAction,
+  stepSession,
+  updateSession,
+} from "./sessions";
 
 afterEach(() => {
   clearSessions();
@@ -45,5 +55,25 @@ describe("session manager", () => {
     expect(observation.playerId).toBe(created.player.id);
     expect(observation.self.id).toBe(created.player.id);
     expect(Array.isArray(observation.entities)).toBe(true);
+  });
+
+  test("unknown session operations throw session-not-found errors", () => {
+    expect(() => performAction("missing-session", "p-1", { type: "wait" })).toThrow(GameRuleError);
+    expect(() => stepSession("missing-session")).toThrow(GameRuleError);
+  });
+
+  test("joining completed session is rejected", () => {
+    const created = createSession({ playerName: "Runner-1" });
+    updateSession(created.session.sessionId, state => ({
+      ...state,
+      status: "won",
+    }));
+
+    expect(() => joinSession({ sessionId: created.session.sessionId, playerName: "Runner-2" })).toThrow(GameRuleError);
+  });
+
+  test("observe unknown player is rejected", () => {
+    const created = createSession({ playerName: "Scout" });
+    expect(() => observeSession(created.session.sessionId, "ghost-player")).toThrow(GameRuleError);
   });
 });

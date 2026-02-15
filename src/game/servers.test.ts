@@ -68,4 +68,10 @@ describe("local lobby server store", () => {
     const listed = await listServers();
     expect(listed[0]?.currentPlayers).toBe(2);
   });
+
+  test("unknown server lookups return empty values", async () => {
+    const fetched = await getServer("missing-server");
+    expect(fetched).toBeNull();
+    expect(getActiveSessionId("missing-server")).toBeUndefined();
+  });
 });
