@@ -1354,6 +1354,46 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_MAX_PLAYERS");
   });
 
+  test("server create rejects blank name with INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "   ",
+        maxPlayers: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("server create trims text fields and defaults maxPlayers", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "  Trim API Lobby  ",
+        description: "  chill run  ",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.server.name).toBe("Trim API Lobby");
+    expect(payload.data.server.description).toBe("chill run");
+    expect(payload.data.server.maxPlayers).toBe(4);
+  });
+
   test("servers list reflects current player counts for active server session", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
