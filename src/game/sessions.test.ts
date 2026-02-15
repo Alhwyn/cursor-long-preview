@@ -5,8 +5,10 @@ import {
   createSession,
   getSession,
   joinSession,
+  listSessions,
   observeSession,
   performAction,
+  requireSession,
   stepSession,
   updateSession,
 } from "./sessions";
@@ -102,5 +104,44 @@ describe("session manager", () => {
     }));
 
     expect(() => performAction(created.session.sessionId, created.player.id, { type: "wait" })).toThrow(GameRuleError);
+  });
+
+  test("session retains server association across updates", () => {
+    const created = createSession({
+      playerName: "Runner-1",
+      serverId: "srv-1",
+    });
+
+    const joined = joinSession({
+      sessionId: created.session.sessionId,
+      playerName: "Runner-2",
+    });
+    const stepped = stepSession(created.session.sessionId);
+
+    expect(created.session.serverId).toBe("srv-1");
+    expect(joined.session.serverId).toBe("srv-1");
+    expect(stepped.serverId).toBe("srv-1");
+  });
+
+  test("requireSession returns stored record and throws for missing session", () => {
+    const created = createSession({ playerName: "Runner-1" });
+    const required = requireSession(created.session.sessionId);
+    expect(required.sessionId).toBe(created.session.sessionId);
+
+    expect(() => requireSession("missing-session")).toThrow(GameRuleError);
+  });
+
+  test("listSessions returns created sessions and clearSessions resets store", async () => {
+    const first = createSession({ playerName: "Runner-A" });
+    await Bun.sleep(2);
+    const second = createSession({ playerName: "Runner-B" });
+
+    const sessions = listSessions();
+    expect(sessions.length).toBe(2);
+    expect(sessions[0]?.sessionId).toBe(first.session.sessionId);
+    expect(sessions[1]?.sessionId).toBe(second.session.sessionId);
+
+    clearSessions();
+    expect(listSessions()).toHaveLength(0);
   });
 });
