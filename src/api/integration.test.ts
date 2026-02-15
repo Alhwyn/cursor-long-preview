@@ -580,6 +580,31 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_JSON");
   });
 
+  test("invalid JSON for action and tick returns 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+    const actionPayload = await actionResponse.json();
+    expect(actionResponse.status).toBe(400);
+    expect(actionPayload.ok).toBe(false);
+    expect(actionPayload.error.code).toBe("INVALID_JSON");
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+    const tickPayload = await tickResponse.json();
+    expect(tickResponse.status).toBe(400);
+    expect(tickPayload.ok).toBe(false);
+    expect(tickPayload.error.code).toBe("INVALID_JSON");
+  });
+
   test("actions are rejected after game is completed", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
