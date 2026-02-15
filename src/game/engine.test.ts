@@ -56,6 +56,20 @@ describe("engine", () => {
     expect(ticked.updatedAt).toBe(state.updatedAt + 1);
   });
 
+  test("adjacent zombie attacks player and respects cooldown across ticks", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const tick1 = tickGame(state);
+    expect(tick1.players["p-1"]?.hp).toBe(108);
+
+    const tick2 = tickGame(tick1);
+    expect(tick2.players["p-1"]?.hp).toBe(108);
+
+    const tick3 = tickGame(tick2);
+    expect(tick3.players["p-1"]?.hp).toBe(96);
+  });
+
   test("game status flips to won when final zombie dies", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
