@@ -792,6 +792,47 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_MAX_PLAYERS");
   });
+
+  test("servers list reflects current player counts for active server session", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createServerResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Counted Lobby",
+        maxPlayers: 4,
+      }),
+    });
+    const createServerPayload = await createServerResponse.json();
+    const serverId = createServerPayload.data.server.id as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CountA" }),
+    });
+    expect(firstJoin.status).toBe(200);
+
+    const secondJoin = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(serverId)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CountB" }),
+    });
+    expect(secondJoin.status).toBe(200);
+
+    const listResponse = await fetch(`${baseUrl}/api/servers`);
+    const listPayload = await listResponse.json();
+    expect(listResponse.status).toBe(200);
+    expect(listPayload.ok).toBe(true);
+
+    const serverRow = (listPayload.data.servers as Array<{ id: string; currentPlayers: number }>).find(
+      entry => entry.id === serverId,
+    );
+    expect(serverRow).toBeDefined();
+    expect(serverRow?.currentPlayers).toBe(2);
+  });
 });
 
 describe("RPC API integration (supabase auth gate)", () => {
