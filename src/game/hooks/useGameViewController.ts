@@ -15,6 +15,7 @@ import {
 } from "../api";
 import type { RealtimeStatus } from "../realtimeStatus";
 import type { Action, GameState, Observation } from "../types";
+import { useBusyMutation } from "./useBusyMutation";
 import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
 import { useSessionPolling } from "./useSessionPolling";
 import { useShooterKeyboard } from "./useShooterKeyboard";
@@ -69,9 +70,8 @@ export function useGameViewController(): GameViewController {
   const [serverInput, setServerInput] = useState<string>("");
   const [state, setState] = useState<GameState | null>(null);
   const [observation, setObservation] = useState<Observation | null>(null);
-  const [error, setError] = useState<string>("");
-  const [busy, setBusy] = useState<boolean>(false);
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
+  const { busy, error, setErrorMessage, runBusyMutation } = useBusyMutation();
 
   const [servers, setServers] = useState<LobbyServer[]>([]);
   const [supabaseMode, setSupabaseMode] = useState<"enabled" | "disabled">("disabled");
@@ -116,23 +116,6 @@ export function useGameViewController(): GameViewController {
     setSystemFeed(previous => [message, ...previous].slice(0, 16));
   }, []);
 
-  const runBusyMutation = useCallback(
-    async (task: () => Promise<void>, onError?: (errorMessage: string) => void) => {
-      setBusy(true);
-      setError("");
-      try {
-        await task();
-      } catch (errorValue) {
-        const errorMessage = String(errorValue);
-        setError(errorMessage);
-        onError?.(errorMessage);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
-  );
-
   const refreshObservation = useCallback(async (targetSessionId: string, targetPlayerId: string) => {
     const observeData = await request<ObserveResponse>(
       `/api/game/observe?session=${encodeURIComponent(targetSessionId)}&player=${encodeURIComponent(targetPlayerId)}`,
@@ -146,9 +129,9 @@ export function useGameViewController(): GameViewController {
       setServers(data.servers);
       setSupabaseMode(data.mode);
     } catch (errorValue) {
-      setError(String(errorValue));
+      setErrorMessage(String(errorValue));
     }
-  }, []);
+  }, [setErrorMessage]);
 
   const callJoin = useCallback(
     async (payload: Record<string, unknown>) => {
@@ -276,7 +259,7 @@ export function useGameViewController(): GameViewController {
 
   const joinPartyLobby = useCallback(async () => {
     if (!partyCodeInput.trim()) {
-      setError("Party code is required.");
+      setErrorMessage("Party code is required.");
       return;
     }
     await runBusyMutation(async () => {
@@ -292,7 +275,7 @@ export function useGameViewController(): GameViewController {
       setPlayerId(data.player.playerId);
       pushSystemFeed(`Joined party ${data.party.partyCode}.`);
     });
-  }, [partyCodeInput, playerName, pushSystemFeed, runBusyMutation]);
+  }, [partyCodeInput, playerName, pushSystemFeed, runBusyMutation, setErrorMessage]);
 
   const togglePartyReady = useCallback(async () => {
     if (!party || !playerId) {
@@ -407,9 +390,9 @@ export function useGameViewController(): GameViewController {
       setState(stateData.state);
       await refreshObservation(sessionId, playerId);
     } catch (errorValue) {
-      setError(String(errorValue));
+      setErrorMessage(String(errorValue));
     }
-  }, [playerId, realtimeStatus, refreshObservation, sessionId]);
+  }, [playerId, realtimeStatus, refreshObservation, sessionId, setErrorMessage]);
 
   useSessionPolling({
     enabled: Boolean(sessionId && playerId && realtimeStatus !== "live"),
