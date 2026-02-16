@@ -1180,6 +1180,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
   });
 
+  test("attack with unknown explicit target returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "MissingTargetAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "z-missing" },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
   test("attack cooldown is enforced once in range", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
