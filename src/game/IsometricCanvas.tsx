@@ -7,8 +7,8 @@ interface IsometricCanvasProps {
   height?: number;
 }
 
-const TILE_WIDTH = 48;
-const TILE_HEIGHT = 24;
+const TILE_WIDTH = 52;
+const TILE_HEIGHT = 26;
 
 function toScreen(x: number, y: number, originX: number, originY: number): { sx: number; sy: number } {
   return {
@@ -21,26 +21,54 @@ function drawTile(
   ctx: CanvasRenderingContext2D,
   centerX: number,
   centerY: number,
-  fill: string,
+  topFill: string,
+  leftFill: string,
+  rightFill: string,
   stroke: string,
-  alpha = 1,
+  height = 10,
 ): void {
   const halfW = TILE_WIDTH / 2;
   const halfH = TILE_HEIGHT / 2;
-  ctx.save();
-  ctx.globalAlpha = alpha;
+
+  // Top face
   ctx.beginPath();
-  ctx.moveTo(centerX, centerY - halfH);
-  ctx.lineTo(centerX + halfW, centerY);
+  ctx.moveTo(centerX, centerY - halfH - height);
+  ctx.lineTo(centerX + halfW, centerY - height);
+  ctx.lineTo(centerX, centerY + halfH - height);
+  ctx.lineTo(centerX - halfW, centerY - height);
+  ctx.closePath();
+  ctx.fillStyle = topFill;
+  ctx.fill();
+
+  // Left face
+  ctx.beginPath();
+  ctx.moveTo(centerX - halfW, centerY - height);
+  ctx.lineTo(centerX, centerY + halfH - height);
   ctx.lineTo(centerX, centerY + halfH);
   ctx.lineTo(centerX - halfW, centerY);
   ctx.closePath();
-  ctx.fillStyle = fill;
+  ctx.fillStyle = leftFill;
   ctx.fill();
+
+  // Right face
+  ctx.beginPath();
+  ctx.moveTo(centerX + halfW, centerY - height);
+  ctx.lineTo(centerX, centerY + halfH - height);
+  ctx.lineTo(centerX, centerY + halfH);
+  ctx.lineTo(centerX + halfW, centerY);
+  ctx.closePath();
+  ctx.fillStyle = rightFill;
+  ctx.fill();
+
   ctx.lineWidth = 1;
   ctx.strokeStyle = stroke;
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY - halfH - height);
+  ctx.lineTo(centerX + halfW, centerY - height);
+  ctx.lineTo(centerX, centerY + halfH - height);
+  ctx.lineTo(centerX - halfW, centerY - height);
+  ctx.closePath();
   ctx.stroke();
-  ctx.restore();
 }
 
 function drawEntity(
@@ -50,21 +78,33 @@ function drawEntity(
   centerY: number,
   isDead: boolean,
 ): void {
-  const bodyWidth = entity.kind === "player" ? 14 : 12;
-  const bodyHeight = entity.kind === "player" ? 18 : 14;
-  const fill = entity.kind === "player" ? "#62d2a2" : "#ff6b7f";
-  const deadFill = "#7f8899";
+  const bodyWidth = entity.kind === "player" ? 16 : 14;
+  const bodyHeight = entity.kind === "player" ? 22 : 18;
+  const fill = entity.kind === "player" ? "#5eead4" : "#fb7185";
+  const deadFill = "#6b7280";
   const px = centerX - bodyWidth / 2;
-  const py = centerY - bodyHeight - 6;
+  const py = centerY - bodyHeight - 18;
+  const hpRatio = Math.max(0, Math.min(1, entity.hp / Math.max(1, entity.maxHp)));
 
   ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "#020617";
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY - 4, 11, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 1;
   ctx.fillStyle = isDead ? deadFill : fill;
   ctx.fillRect(px, py, bodyWidth, bodyHeight);
+  ctx.fillStyle = isDead ? "#475569" : "#0f172a";
+  ctx.fillRect(px + 2, py + 5, bodyWidth - 4, 2);
+  ctx.fillRect(px + 2, py + bodyHeight - 4, bodyWidth - 4, 2);
+
+  // HP bar
   ctx.fillStyle = "#0f172a";
-  ctx.fillRect(px + 2, py + 4, bodyWidth - 4, 2);
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = "#0f172a";
-  ctx.fillRect(centerX - 8, centerY - 2, 16, 4);
+  ctx.fillRect(px - 1, py - 8, bodyWidth + 2, 4);
+  ctx.fillStyle = hpRatio > 0.5 ? "#22c55e" : hpRatio > 0.25 ? "#f59e0b" : "#f43f5e";
+  ctx.fillRect(px, py - 7, bodyWidth * hpRatio, 2.5);
   ctx.restore();
 }
 
@@ -107,19 +147,30 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
     }
 
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#0a0f1f";
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, "#0b1220");
+    sky.addColorStop(1, "#040814");
+    ctx.fillStyle = sky;
     ctx.fillRect(0, 0, width, height);
 
+    ctx.globalAlpha = 0.1;
+    for (let line = 0; line < height; line += 4) {
+      ctx.fillStyle = line % 8 === 0 ? "#0f172a" : "#111827";
+      ctx.fillRect(0, line, width, 1);
+    }
+    ctx.globalAlpha = 1;
+
     const originX = width / 2;
-    const originY = 84;
+    const originY = 112;
 
     for (const tile of state.map.tiles) {
       const { sx, sy } = toScreen(tile.x, tile.y, originX, originY);
       if (tile.type === "wall") {
-        drawTile(ctx, sx, sy, "#30374a", "#111827", 0.9);
+        drawTile(ctx, sx, sy, "#546177", "#3f4a5f", "#313a4a", "#111827", 18);
       } else {
-        drawTile(ctx, sx, sy, "#1f8a5b", "#0e5a39", 0.92);
+        const hueShift = ((tile.x + tile.y) % 3) - 1;
+        const top = hueShift === -1 ? "#2a8f63" : hueShift === 0 ? "#2f9e6d" : "#35ad78";
+        drawTile(ctx, sx, sy, top, "#246f51", "#2a7f5c", "#0f4f3a", 8);
       }
     }
 
@@ -138,14 +189,14 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
           alive: entity.alive,
         },
         sx,
-        sy,
+        sy - 2,
         !entity.alive,
       );
     }
   }, [entities, height, state, width]);
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-950 p-2 overflow-auto">
+    <div className="rounded-xl border border-emerald-400/20 bg-slate-950 p-2 overflow-auto shadow-[0_0_45px_rgba(16,185,129,0.08)]">
       {!state ? (
         <div className="h-[520px] w-full min-w-[820px] flex items-center justify-center text-slate-400">
           Join a session to render the world.

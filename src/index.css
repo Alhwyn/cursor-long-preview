@@ -3,9 +3,25 @@
 @layer base {
   :root {
     @apply text-slate-100 bg-slate-950 font-sans;
+    color-scheme: dark;
   }
 
   body {
-    @apply min-w-[320px] min-h-screen m-0 bg-slate-950;
+    @apply min-w-[320px] min-h-screen m-0 text-slate-100;
+    background:
+      radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.1), transparent 30%),
+      radial-gradient(circle at 80% 10%, rgba(56, 189, 248, 0.08), transparent 35%),
+      radial-gradient(circle at 50% 120%, rgba(147, 51, 234, 0.1), transparent 40%),
+      #020617;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button {
+    transition: background-color 140ms ease, transform 120ms ease, opacity 120ms ease;
+  }
+
+  button:active {
+    transform: translateY(1px);
   }
 }

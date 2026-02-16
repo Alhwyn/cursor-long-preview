@@ -314,11 +314,142 @@ Response:
 
 ---
 
+## Party + Realtime Endpoints (4-player setup)
+
+### `POST /api/party/create`
+
+Create a new 4-player party and add the caller as leader.
+
+Request:
+
+```json
+{
+  "playerName": "Leader",
+  "playerId": "optional-explicit-id"
+}
+```
+
+Response (`201`):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "party": {
+      "partyId": "party-...",
+      "partyCode": "ABC123",
+      "status": "open",
+      "leaderPlayerId": "party-player-1",
+      "maxPlayers": 4,
+      "readyCount": 0,
+      "allReady": false,
+      "members": []
+    },
+    "player": {}
+  }
+}
+```
+
+---
+
+### `POST /api/party/join`
+
+Join an open party by code.
+
+Request:
+
+```json
+{
+  "partyCode": "ABC123",
+  "playerName": "Guest"
+}
+```
+
+Returns `409 PARTY_FULL` once 4 members are present.
+
+---
+
+### `POST /api/party/ready`
+
+Toggle readiness for a party member.
+
+Request:
+
+```json
+{
+  "partyId": "party-...",
+  "playerId": "party-player-2",
+  "ready": true
+}
+```
+
+---
+
+### `POST /api/party/start`
+
+Start a party match (leader only, all members must be ready).
+
+Request:
+
+```json
+{
+  "partyId": "party-...",
+  "playerId": "party-player-1",
+  "zombieCount": 6
+}
+```
+
+Returns:
+- `403 PARTY_NOT_LEADER` when starter is not leader.
+- `409 PARTY_NOT_READY` when not all members are ready.
+- `200` with `sessionId` + full starting `state` on success.
+
+---
+
+### `POST /api/party/leave`
+
+Leave party. If leader leaves, leadership transfers to next member.  
+If last member leaves, party is deleted.
+
+Request:
+
+```json
+{
+  "partyId": "party-...",
+  "playerId": "party-player-3"
+}
+```
+
+---
+
+### `GET /api/party/state?partyId=<partyId>`
+
+Fetch current party snapshot and active game state (if started).
+
+---
+
+### `GET /api/realtime/stream?partyId=<partyId>&playerId=<playerId>`
+
+Server-Sent Events realtime stream for party/game updates.
+
+Emits:
+- `connected`
+- `party_update`
+- `session_state`
+- `system_notice`
+- `ping`
+
+Use this stream for party/lobby sync and in-match state push updates.
+
+---
+
 ## Common Error Codes
 
 - `INVALID_JSON`, `INVALID_BODY`, `INVALID_FIELD`
 - `MISSING_QUERY`, `MISSING_SERVER_ID`, `INVALID_ACTION`, `INVALID_DIRECTION`, `INVALID_ZOMBIE_COUNT`
 - `SESSION_NOT_FOUND`, `SESSION_SERVER_MISMATCH`, `PLAYER_NOT_FOUND`, `TARGET_NOT_FOUND`, `SERVER_NOT_FOUND`
+- `PARTY_NOT_FOUND`, `PARTY_MEMBER_NOT_FOUND`, `PARTY_NOT_LEADER`
+- `PARTY_FULL`, `PARTY_NOT_OPEN`, `PARTY_NOT_READY`, `PARTY_MEMBER_EXISTS`
 - `PLAYER_DEAD`, `MOVE_BLOCKED`, `MOVE_OCCUPIED`, `TARGET_OUT_OF_RANGE`, `ATTACK_COOLDOWN`, `SERVER_FULL`, `GAME_COMPLETED`
 - `UNAUTHORIZED`, `FORBIDDEN`
 - `SUPABASE_QUERY_FAILED`, `SUPABASE_CREATE_FAILED`, `SUPABASE_JOIN_FAILED`, `SUPABASE_SNAPSHOT_FAILED`
@@ -334,3 +465,12 @@ Response:
    - else move to reduce distance.
 4. `POST /api/game/action`.
 5. Repeat 2–4 until `status` is `won` or `lost`.
+
+## 4-player Party Realtime Loop
+
+1. Leader `POST /api/party/create`.
+2. Other players `POST /api/party/join` with `partyCode`.
+3. Every player opens `GET /api/realtime/stream` with `partyId + playerId`.
+4. Every player marks ready via `POST /api/party/ready`.
+5. Leader starts via `POST /api/party/start`.
+6. Players send actions through `/api/game/action`; party stream pushes `session_state` updates.

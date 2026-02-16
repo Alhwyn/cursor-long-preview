@@ -31,6 +31,20 @@ Drive the server-authoritative simulation through API actions without direct sta
    - `POST /api/servers/:id/join`
 4. Use returned `sessionId` + `playerId` in normal game loop endpoints.
 
+## 4-Player Party Realtime Flow
+
+1. Leader creates party:
+   - `POST /api/party/create`
+2. Share `partyCode`; other players join:
+   - `POST /api/party/join`
+3. Open realtime stream for each member:
+   - `GET /api/realtime/stream?partyId=<id>&playerId=<id>` (SSE)
+4. Each player toggles ready:
+   - `POST /api/party/ready`
+5. Leader starts match:
+   - `POST /api/party/start`
+6. Play through `/api/game/action`; consume `session_state` events from SSE.
+
 ### Important session/server constraints
 
 - If calling `POST /api/game/join` with `serverId`, the server must exist, else `SERVER_NOT_FOUND`.
@@ -63,5 +77,6 @@ See `reference.md` for endpoint payload examples and error mapping.
 ## Verification commands
 
 - `bun run smoke:api` (fallback mode smoke checks)
+- `bun run smoke:api:party` (party + realtime smoke checks)
 - `bun run smoke:api:supabase-auth` (auth gate smoke checks)
-- `bun run verify` (typecheck + tests + build + both smoke suites)
+- `bun run verify` (typecheck + tests + build + fallback smoke + party smoke + auth smoke)

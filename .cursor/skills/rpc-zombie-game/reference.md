@@ -10,6 +10,13 @@
 - `GET /api/servers`
 - `POST /api/servers`
 - `POST /api/servers/:id/join`
+- `POST /api/party/create`
+- `POST /api/party/join`
+- `POST /api/party/ready`
+- `POST /api/party/start`
+- `POST /api/party/leave`
+- `GET /api/party/state`
+- `GET /api/realtime/stream`
 
 ## Request / Response Examples
 
@@ -76,6 +83,30 @@ curl -s -X POST http://127.0.0.1:3000/api/servers/<SERVER_ID>/join \
   -d '{"playerName":"Agent"}'
 ```
 
+### Create Party + Join by Code
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/party/create \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"Leader"}'
+
+curl -s -X POST http://127.0.0.1:3000/api/party/join \
+  -H "Content-Type: application/json" \
+  -d '{"partyCode":"<CODE>","playerName":"Guest"}'
+```
+
+### Ready + Start Party
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/party/ready \
+  -H "Content-Type: application/json" \
+  -d '{"partyId":"<PARTY>","playerId":"<PLAYER>","ready":true}'
+
+curl -s -X POST http://127.0.0.1:3000/api/party/start \
+  -H "Content-Type: application/json" \
+  -d '{"partyId":"<PARTY>","playerId":"<LEADER>"}'
+```
+
 ## Error-to-Action Guidance
 
 - `SESSION_NOT_FOUND` -> restart flow from `/api/game/join`.
@@ -85,12 +116,16 @@ curl -s -X POST http://127.0.0.1:3000/api/servers/<SERVER_ID>/join \
 - `INVALID_ZOMBIE_COUNT` -> retry join with integer `zombieCount` in `[1, 32]`.
 - `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `targetId`) are non-empty strings when supplied (surrounding whitespace is trimmed by server).
 - `MISSING_SERVER_ID` -> ensure `POST /api/servers/:id/join` includes a non-empty `:id` path segment; surrounding whitespace is trimmed by server.
+- `PARTY_NOT_READY` -> ensure every party member marked ready before leader starts.
+- `PARTY_NOT_LEADER` -> call `POST /api/party/start` with leader `playerId`.
+- `PARTY_FULL` -> party already has 4 members.
 - `TARGET_OUT_OF_RANGE` -> move first.
 - `ATTACK_COOLDOWN` -> move or wait one turn.
 - `MOVE_BLOCKED` / `MOVE_OCCUPIED` -> pick alternate direction.
 - `SERVER_FULL` -> choose another server or create a new one.
 - `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode (`UNAUTHORIZED` also covers missing/non-Bearer auth headers; Bearer scheme parsing is case-insensitive).
 - In enabled mode, auth validation runs before JSON body parsing on `POST /api/servers`.
+- For realtime sync, open `GET /api/realtime/stream` (SSE) after joining/creating party.
 
 ## Observation-driven movement heuristic
 

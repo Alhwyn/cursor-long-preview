@@ -4,6 +4,8 @@ Server-authoritative zombie survival game with:
 
 - deterministic game engine
 - RPC gameplay endpoints
+- 4-player party lifecycle APIs (create/join/ready/start/leave)
+- realtime SSE party/session updates
 - in-memory session/lobby management
 - optional Supabase-backed lobby/auth mode
 - React isometric canvas client + HUD + observation panel
@@ -48,9 +50,15 @@ Supabase-auth gate smoke test (run server with Supabase env vars set):
 bun run smoke:api:supabase-auth
 ```
 
+Party + realtime smoke test:
+
+```bash
+bun run smoke:api:party
+```
+
 ## Full Verification
 
-Runs strict typecheck, tests, production build, fallback smoke test, and Supabase auth-gate smoke test:
+Runs strict typecheck, tests, production build, fallback smoke test, party/realtime smoke test, and Supabase auth-gate smoke test:
 
 ```bash
 bun run verify
