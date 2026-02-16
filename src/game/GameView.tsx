@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import RaycastShooterCanvas from "./RaycastShooterCanvas";
 import type { Action, GameState, Observation, PartyState } from "./types";
+import DirectSessionPanel from "./components/DirectSessionPanel";
 import HudPanel from "./components/HudPanel";
 import ObservationPanel from "./components/ObservationPanel";
 import PartyLobbyPanel from "./components/PartyLobbyPanel";
@@ -600,53 +601,24 @@ export function GameView() {
 
       <div className="grid gap-4 lg:grid-cols-[1.8fr_1fr]">
         <section className="space-y-4">
-          <div className="bg-slate-900/90 border border-slate-700 rounded-xl p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Direct Session (quick shooter join)</h2>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <label className="text-sm text-slate-300">
-                Player Name
-                <input
-                  value={playerName}
-                  onChange={event => setPlayerName(event.target.value)}
-                  className="mt-1 w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-                />
-              </label>
-              <label className="text-sm text-slate-300">
-                Existing Session (optional)
-                <input
-                  value={sessionInput}
-                  onChange={event => setSessionInput(event.target.value)}
-                  className="mt-1 w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-                />
-              </label>
-              <label className="text-sm text-slate-300 sm:col-span-2">
-                Server ID (optional)
-                <input
-                  value={serverInput}
-                  onChange={event => setServerInput(event.target.value)}
-                  className="mt-1 w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void callJoin({
-                  playerName,
-                  session: sessionInput || undefined,
-                  serverId: serverInput || undefined,
-                })
-              }
-              className="rounded-md bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 px-4 py-2 font-medium text-slate-950"
-            >
-              {busy ? "Working..." : "Join Game"}
-            </button>
-            <div className="text-sm text-slate-400">
-              Session: <span className="text-slate-200">{sessionId || "—"}</span> | Player:{" "}
-              <span className="text-slate-200">{playerId || "—"}</span>
-            </div>
-          </div>
+          <DirectSessionPanel
+            busy={busy}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            sessionInput={sessionInput}
+            onSessionInputChange={setSessionInput}
+            serverInput={serverInput}
+            onServerInputChange={setServerInput}
+            sessionId={sessionId}
+            playerId={playerId}
+            onJoinGame={() => {
+              void callJoin({
+                playerName,
+                session: sessionInput || undefined,
+                serverId: serverInput || undefined,
+              });
+            }}
+          />
 
           <RaycastShooterCanvas state={state} focusPlayerId={playerId} />
 
