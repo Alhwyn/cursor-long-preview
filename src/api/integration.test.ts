@@ -1577,6 +1577,8 @@ describe("RPC API integration (fallback mode)", () => {
       | { distance: number; dx: number; dy: number }
       | undefined;
     expect(nearestZombie).toBeDefined();
+    const nearestZombieId = preAttackObservePayload.data.observation.nearestZombie?.id as string | undefined;
+    expect(nearestZombieId).toBeTruthy();
     const expectedFacing: Direction =
       Math.abs(nearestZombie!.dx) >= Math.abs(nearestZombie!.dy)
         ? nearestZombie!.dx >= 0
@@ -1592,7 +1594,7 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         session: sessionId,
         playerId,
-        action: { type: "attack" },
+        action: { type: "attack", targetId: nearestZombieId },
       }),
     });
     const firstAttackPayload = await firstAttack.json();
