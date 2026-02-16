@@ -104,3 +104,24 @@ export interface Observation {
   zombies: ObservationEntity[];
   entities: ObservationEntity[];
 }
+
+export type PartyStatus = "open" | "in_game" | "closed";
+
+export interface PartyMember {
+  playerId: string;
+  playerName: string;
+  ready: boolean;
+  joinedAt: number;
+}
+
+export interface PartyState {
+  partyId: string;
+  partyCode: string;
+  status: PartyStatus;
+  leaderPlayerId: string;
+  maxPlayers: number;
+  members: PartyMember[];
+  sessionId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
