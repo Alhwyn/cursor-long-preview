@@ -65,6 +65,14 @@ describe("engine", () => {
     expect(afterAttack.players["p-1"]?.facing).toBe("left");
   });
 
+  test("attack cooldown is enforced before explicit target validation", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "z-missing" })).toThrow("cooldown");
+  });
+
   test("attack out of range is rejected", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 12, y: 12 };
