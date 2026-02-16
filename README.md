@@ -81,3 +81,19 @@ Supabase is enabled only when all env vars are set:
 Without these, lobby APIs fall back to local in-memory mode for development.
 
 See `GAME_API.md` for endpoint contracts and agent play loop guidance.
+
+## Agent Join Handoff (`sessionId`)
+
+If a user wants their own agent to join an already-running match:
+
+1. Start or join a match (party or direct flow).
+2. Share the active `sessionId` with the agent.
+3. Agent joins with:
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/join \
+  -H "Content-Type: application/json" \
+  -d '{"session":"<SESSION_ID>","playerName":"Agent Ally"}'
+```
+
+The join response returns the agent `playerId` to use for `/api/game/observe` and `/api/game/action`.

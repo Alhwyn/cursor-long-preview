@@ -28,6 +28,19 @@ curl -s -X POST http://127.0.0.1:3000/api/game/join \
   -d '{"playerName":"Agent"}'
 ```
 
+### Join Existing Session (agent handoff by `sessionId`)
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/join \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session":"<SESSION_ID>",
+    "playerName":"Agent Ally"
+  }'
+```
+
+Use this after a leader starts party match and shares `sessionId`.
+
 ### Observe
 
 ```bash
@@ -106,6 +119,8 @@ curl -s -X POST http://127.0.0.1:3000/api/party/start \
   -H "Content-Type: application/json" \
   -d '{"partyId":"<PARTY>","playerId":"<LEADER>","agentEnabled":true}'
 ```
+
+Take the `sessionId` from this response and pass it to any helper agents via `POST /api/game/join`.
 
 ## Error-to-Action Guidance
 

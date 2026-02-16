@@ -23,6 +23,24 @@ Leverage CAI companion support when enabled (combat-capable in-session agent all
    - `POST /api/game/action`
 4. Stop when state/observation `status` becomes `won` or `lost`.
 
+## Agent Handoff (install skill + join by `sessionId`)
+
+Use this when a human player wants their own agent to drop into an already-running match:
+
+1. Install this skill in the agent runtime.
+2. Human shares:
+   - `baseUrl`
+   - `sessionId`
+3. Agent joins that exact session:
+   - `POST /api/game/join`
+   - body: `{ "session":"<SESSION_ID>", "playerName":"Agent Ally" }`
+4. Agent stores returned `playerId` and uses normal observe/action loop.
+
+Notes:
+- Do **not** fabricate `playerId`; let server assign unless rejoining an existing identity.
+- If the shared session is full (server-linked flow), join may return `SERVER_FULL`.
+- If session is invalid/finished, re-bootstrap through party/lobby flow.
+
 ## Multiplayer / Lobby Flow
 
 1. `GET /api/servers` for available servers.
@@ -46,6 +64,7 @@ Leverage CAI companion support when enabled (combat-capable in-session agent all
    - `POST /api/party/start`
 6. Play through `/api/game/action`; consume `session_state` events from SSE.
 7. Expect CAI companion in state/observation when `agentEnabled` is true (default for party starts).
+8. For external agents, share the returned `sessionId` from `/api/party/start`, then each agent joins with `POST /api/game/join` using that `session`.
 
 ### Important session/server constraints
 

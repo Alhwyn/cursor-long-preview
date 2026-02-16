@@ -76,6 +76,22 @@ Response `201` (new) / `200` (join existing):
 }
 ```
 
+#### Agent handoff pattern (join by `sessionId`)
+
+For user-controlled helper agents:
+
+1. Human player/leader shares `sessionId` from an active match.
+2. Agent calls `POST /api/game/join` with that `session`:
+
+```json
+{
+  "session": "existing-session-id",
+  "playerName": "Agent Ally"
+}
+```
+
+3. Agent stores returned `playerId` and continues with `/api/game/observe` + `/api/game/action`.
+
 ---
 
 ### `GET /api/game/state?session=<sessionId>`
@@ -489,3 +505,4 @@ Use this stream for party/lobby sync and in-match state push updates.
 5. Leader starts via `POST /api/party/start`.
 6. Players send actions through `/api/game/action`; party stream pushes `session_state` updates.
 7. Endless mode supports terminator archetypes: `normal` (ranged), `flying`, `explosive`, `mech`.
+8. Leader can share `sessionId` from `/api/party/start` so external helper agents can join that running match via `POST /api/game/join`.
