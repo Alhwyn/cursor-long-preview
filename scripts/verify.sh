@@ -29,6 +29,8 @@ bun src/index.ts > /tmp/rpc-zombie-verify-default.log 2>&1 &
 SERVER_PID=$!
 sleep 2
 ./scripts/api-smoke.sh
+echo "verify: api smoke (party + realtime)"
+./scripts/api-smoke-party.sh
 cleanup_server
 
 echo "verify: api smoke (supabase auth gate)"

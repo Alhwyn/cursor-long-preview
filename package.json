@@ -9,6 +9,7 @@
     "build": "bun run build.ts",
     "test": "bun test",
     "smoke:api": "./scripts/api-smoke.sh",
+    "smoke:api:party": "./scripts/api-smoke-party.sh",
     "smoke:api:supabase-auth": "./scripts/api-smoke-supabase-auth.sh",
     "verify": "./scripts/verify.sh"
   },

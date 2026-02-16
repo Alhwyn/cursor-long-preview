@@ -281,6 +281,14 @@ export function startParty(input: StartPartyInput): PartyState {
   });
 }
 
+export function reopenParty(partyId: string): PartyState {
+  const party = ensureParty(partyId);
+  return upsertParty({
+    ...party,
+    status: "open",
+  });
+}
+
 export function linkPartySession(partyId: string, sessionId: string): PartyState {
   const party = ensureParty(partyId);
   return upsertParty({

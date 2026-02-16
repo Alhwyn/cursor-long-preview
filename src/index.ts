@@ -25,6 +25,18 @@ import {
   setActiveSessionId,
 } from "./game/servers";
 import {
+  createParty,
+  getParty,
+  getPartyBySessionId,
+  joinPartyByCode,
+  leaveParty,
+  linkPartySession,
+  reopenParty,
+  setPartyReady,
+  startParty,
+} from "./game/parties";
+import { createRealtimeStream, publishPartyUpdate, publishSessionState, publishSystemNotice, startRealtimeHeartbeat } from "./game/realtime";
+import {
   createSession,
   getSession,
   getState,
@@ -34,7 +46,7 @@ import {
   type SessionRecord,
   stepSession,
 } from "./game/sessions";
-import type { Action, Direction, Player } from "./game/types";
+import type { Action, Direction, PartyState, Player } from "./game/types";
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
@@ -54,10 +66,15 @@ function mapDomainError(errorValue: unknown): HttpError {
     case "SESSION_NOT_FOUND":
     case "PLAYER_NOT_FOUND":
     case "TARGET_NOT_FOUND":
+    case "PARTY_NOT_FOUND":
+    case "PARTY_MEMBER_NOT_FOUND":
       return new HttpError(404, errorValue.code, errorValue.message);
+    case "PARTY_NOT_LEADER":
+      return new HttpError(403, errorValue.code, errorValue.message);
     case "INVALID_SERVER_NAME":
     case "INVALID_MAX_PLAYERS":
     case "INVALID_ZOMBIE_COUNT":
+    case "INVALID_PARTY_CODE":
     case "NO_SPAWN":
       return new HttpError(400, errorValue.code, errorValue.message);
     case "GAME_COMPLETED":
@@ -69,10 +86,23 @@ function mapDomainError(errorValue: unknown): HttpError {
     case "NO_ZOMBIES":
     case "PLAYER_EXISTS":
     case "SERVER_FULL":
+    case "PARTY_FULL":
+    case "PARTY_MEMBER_EXISTS":
+    case "PARTY_NOT_OPEN":
+    case "PARTY_NOT_READY":
       return new HttpError(409, errorValue.code, errorValue.message);
     default:
       return new HttpError(500, errorValue.code, errorValue.message);
   }
+}
+
+function partyPayload(party: PartyState): PartyState & { readyCount: number; allReady: boolean } {
+  const readyCount = party.members.filter(member => member.ready).length;
+  return {
+    ...party,
+    readyCount,
+    allReady: readyCount === party.members.length,
+  };
 }
 
 function resolveObservationPlayerId(sessionId: string, requestedPlayerId?: string): string {
@@ -90,6 +120,19 @@ function resolveObservationPlayerId(sessionId: string, requestedPlayerId?: strin
     throw new HttpError(404, "PLAYER_NOT_FOUND", "No players exist in this session.");
   }
   return firstPlayer.id;
+}
+
+function broadcastPartySessionIfPresent(sessionId: string): void {
+  const party = getPartyBySessionId(sessionId);
+  if (!party) {
+    return;
+  }
+
+  const session = getSession(sessionId);
+  if (!session) {
+    return;
+  }
+  publishSessionState(party.partyId, session.state);
 }
 
 function parseActionBody(payload: Record<string, unknown>): Action {
@@ -158,6 +201,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
       if (session.serverId) {
         await recordServerJoin(session.serverId, player.id, player.name);
       }
+      broadcastPartySessionIfPresent(session.sessionId);
       return ok({
         sessionId: session.sessionId,
         playerId: player.id,
@@ -186,6 +230,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
       await recordServerJoin(serverId, player.id, player.name);
       await recordSnapshot({ serverId, state: session.state });
     }
+    broadcastPartySessionIfPresent(session.sessionId);
 
     return ok(
       {
@@ -242,6 +287,7 @@ async function executeGameAction(request: Request): Promise<Response> {
     if (session.serverId) {
       await recordSnapshot({ serverId: session.serverId, state: session.state });
     }
+    broadcastPartySessionIfPresent(session.sessionId);
 
     return ok({
       sessionId: session.sessionId,
@@ -264,6 +310,7 @@ async function tickGameSession(request: Request): Promise<Response> {
     if (session.serverId) {
       await recordSnapshot({ serverId: session.serverId, state: session.state });
     }
+    broadcastPartySessionIfPresent(session.sessionId);
     return ok({
       sessionId: session.sessionId,
       state: session.state,
@@ -377,6 +424,208 @@ async function joinLobbyServer(request: Request): Promise<Response> {
   }
 }
 
+async function createPartyLobby(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const playerId = optionalNonEmptyString(body.playerId, "playerId");
+  const playerName = optionalString(body.playerName, "playerName");
+
+  try {
+    const created = createParty({
+      playerId,
+      playerName,
+    });
+    publishPartyUpdate(created.party);
+    return ok(
+      {
+        party: partyPayload(created.party),
+        player: created.member,
+      },
+      201,
+    );
+  } catch (errorValue) {
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function joinPartyLobby(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const partyCode = requireString(body.partyCode, "partyCode");
+  const playerId = optionalNonEmptyString(body.playerId, "playerId");
+  const playerName = optionalString(body.playerName, "playerName");
+
+  try {
+    const joined = joinPartyByCode({
+      partyCode,
+      playerId,
+      playerName,
+    });
+    publishPartyUpdate(joined.party);
+    return ok({
+      party: partyPayload(joined.party),
+      player: joined.member,
+    });
+  } catch (errorValue) {
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function getPartyState(request: Request): Promise<Response> {
+  const partyId = queryString(new URL(request.url), "partyId");
+  const party = getParty(partyId);
+  if (!party) {
+    throw new HttpError(404, "PARTY_NOT_FOUND", `Party "${partyId}" was not found.`);
+  }
+
+  const session = party.sessionId ? getSession(party.sessionId) : null;
+  return ok({
+    party: partyPayload(party),
+    state: session?.state,
+  });
+}
+
+async function setPartyMemberReadyState(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const partyId = requireString(body.partyId, "partyId");
+  const playerId = requireString(body.playerId, "playerId");
+  if (typeof body.ready !== "boolean") {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "ready" must be a boolean.');
+  }
+  const ready = body.ready as boolean;
+
+  try {
+    const updatedParty = setPartyReady({
+      partyId,
+      playerId,
+      ready,
+    });
+    publishPartyUpdate(updatedParty);
+    return ok({
+      party: partyPayload(updatedParty),
+    });
+  } catch (errorValue) {
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function leavePartyLobby(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const partyId = requireString(body.partyId, "partyId");
+  const playerId = requireString(body.playerId, "playerId");
+
+  try {
+    const updated = leaveParty({
+      partyId,
+      playerId,
+    });
+
+    if (!updated) {
+      return ok({
+        party: null,
+      });
+    }
+
+    publishPartyUpdate(updated);
+    return ok({
+      party: partyPayload(updated),
+    });
+  } catch (errorValue) {
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function startPartyMatch(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const partyId = requireString(body.partyId, "partyId");
+  const playerId = requireString(body.playerId, "playerId");
+  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+
+  let startedParty: PartyState | null = null;
+
+  try {
+    const activeParty = startParty({
+      partyId,
+      playerId,
+    });
+    startedParty = activeParty;
+
+    const leaderMember = activeParty.members.find(member => member.playerId === activeParty.leaderPlayerId);
+    if (!leaderMember) {
+      throw new GameRuleError("PARTY_MEMBER_NOT_FOUND", "Party leader is not present in party roster.");
+    }
+
+    const { session } = createSession({
+      playerId: leaderMember.playerId,
+      playerName: leaderMember.playerName,
+      zombieCount,
+    });
+
+    for (const member of activeParty.members) {
+      if (member.playerId === leaderMember.playerId) {
+        continue;
+      }
+      joinSession({
+        sessionId: session.sessionId,
+        playerId: member.playerId,
+        playerName: member.playerName,
+      });
+    }
+
+    const linkedParty = linkPartySession(activeParty.partyId, session.sessionId);
+    const activeSession = getSession(session.sessionId);
+    if (!activeSession) {
+      throw new GameRuleError("SESSION_NOT_FOUND", `Session "${session.sessionId}" was not found after start.`);
+    }
+
+    publishPartyUpdate(linkedParty);
+    publishSessionState(linkedParty.partyId, activeSession.state);
+    publishSystemNotice(linkedParty.partyId, "info", `Party match started by ${leaderMember.playerName}.`);
+
+    return ok({
+      party: partyPayload(linkedParty),
+      sessionId: activeSession.sessionId,
+      state: activeSession.state,
+    });
+  } catch (errorValue) {
+    if (startedParty) {
+      try {
+        const reopened = reopenParty(startedParty.partyId);
+        publishPartyUpdate(reopened);
+      } catch {
+        // no-op
+      }
+    }
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function openRealtimeStream(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const partyId = queryString(url, "partyId");
+  const playerId = queryString(url, "playerId");
+  const party = getParty(partyId);
+  if (!party) {
+    throw new HttpError(404, "PARTY_NOT_FOUND", `Party "${partyId}" was not found.`);
+  }
+
+  const partyMember = party.members.find(member => member.playerId === playerId);
+  if (!partyMember) {
+    throw new HttpError(404, "PARTY_MEMBER_NOT_FOUND", `Player "${playerId}" was not found in this party.`);
+  }
+
+  const streamResponse = createRealtimeStream({
+    partyId,
+    playerId,
+    signal: request.signal,
+  });
+
+  return streamResponse;
+}
+
 configureServerPlayerCountResolver(sessionId => {
   const session = getSession(sessionId);
   if (!session) {
@@ -384,6 +633,8 @@ configureServerPlayerCountResolver(sessionId => {
   }
   return Object.keys(session.state.players).length;
 });
+
+startRealtimeHeartbeat();
 
 const server = serve({
   port: Number.isFinite(PORT) ? PORT : 3000,
@@ -409,6 +660,27 @@ const server = serve({
     },
     "/api/servers/:id/join": {
       POST: req => withErrorBoundary(() => joinLobbyServer(req)),
+    },
+    "/api/party/create": {
+      POST: req => withErrorBoundary(() => createPartyLobby(req)),
+    },
+    "/api/party/join": {
+      POST: req => withErrorBoundary(() => joinPartyLobby(req)),
+    },
+    "/api/party/state": {
+      GET: req => withErrorBoundary(() => getPartyState(req)),
+    },
+    "/api/party/ready": {
+      POST: req => withErrorBoundary(() => setPartyMemberReadyState(req)),
+    },
+    "/api/party/start": {
+      POST: req => withErrorBoundary(() => startPartyMatch(req)),
+    },
+    "/api/party/leave": {
+      POST: req => withErrorBoundary(() => leavePartyLobby(req)),
+    },
+    "/api/realtime/stream": {
+      GET: req => withErrorBoundary(() => openRealtimeStream(req)),
     },
     "/*": index,
   },

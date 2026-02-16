@@ -2079,6 +2079,217 @@ describe("RPC API integration (fallback mode)", () => {
     expect(serverRow).toBeDefined();
     expect(serverRow?.currentPlayers).toBe(2);
   });
+
+  test("party flow supports up to four players and start lifecycle", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createPartyResponse = await fetch(`${baseUrl}/api/party/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "Leader" }),
+    });
+    const createPartyPayload = await createPartyResponse.json();
+    expect(createPartyResponse.status).toBe(201);
+    expect(createPartyPayload.ok).toBe(true);
+
+    const partyId = createPartyPayload.data.party.partyId as string;
+    const partyCode = createPartyPayload.data.party.partyCode as string;
+    const leaderPlayerId = createPartyPayload.data.player.playerId as string;
+
+    const joinTwo = await fetch(`${baseUrl}/api/party/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partyCode, playerName: "Two" }),
+    });
+    const joinTwoPayload = await joinTwo.json();
+    expect(joinTwo.status).toBe(200);
+    const playerTwoId = joinTwoPayload.data.player.playerId as string;
+
+    const joinThree = await fetch(`${baseUrl}/api/party/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partyCode, playerName: "Three" }),
+    });
+    const joinThreePayload = await joinThree.json();
+    expect(joinThree.status).toBe(200);
+    const playerThreeId = joinThreePayload.data.player.playerId as string;
+
+    const joinFour = await fetch(`${baseUrl}/api/party/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partyCode, playerName: "Four" }),
+    });
+    const joinFourPayload = await joinFour.json();
+    expect(joinFour.status).toBe(200);
+    const playerFourId = joinFourPayload.data.player.playerId as string;
+
+    const overflowJoin = await fetch(`${baseUrl}/api/party/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partyCode, playerName: "Overflow" }),
+    });
+    const overflowJoinPayload = await overflowJoin.json();
+    expect(overflowJoin.status).toBe(409);
+    expect(overflowJoinPayload.ok).toBe(false);
+    expect(overflowJoinPayload.error.code).toBe("PARTY_FULL");
+
+    const nonLeaderStart = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: playerTwoId,
+      }),
+    });
+    const nonLeaderStartPayload = await nonLeaderStart.json();
+    expect(nonLeaderStart.status).toBe(403);
+    expect(nonLeaderStartPayload.ok).toBe(false);
+    expect(nonLeaderStartPayload.error.code).toBe("PARTY_NOT_LEADER");
+
+    const notReadyStart = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+      }),
+    });
+    const notReadyStartPayload = await notReadyStart.json();
+    expect(notReadyStart.status).toBe(409);
+    expect(notReadyStartPayload.ok).toBe(false);
+    expect(notReadyStartPayload.error.code).toBe("PARTY_NOT_READY");
+
+    for (const playerId of [leaderPlayerId, playerTwoId, playerThreeId, playerFourId]) {
+      const readyResponse = await fetch(`${baseUrl}/api/party/ready`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partyId,
+          playerId,
+          ready: true,
+        }),
+      });
+      const readyPayload = await readyResponse.json();
+      expect(readyResponse.status).toBe(200);
+      expect(readyPayload.ok).toBe(true);
+    }
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(startPayload.data.party.status).toBe("in_game");
+    expect(Object.keys(startPayload.data.state.players).length).toBe(4);
+
+    const stateResponse = await fetch(`${baseUrl}/api/party/state?partyId=${encodeURIComponent(partyId)}`);
+    const statePayload = await stateResponse.json();
+    expect(stateResponse.status).toBe(200);
+    expect(statePayload.ok).toBe(true);
+    expect(statePayload.data.party.sessionId).toBe(startPayload.data.sessionId);
+    expect(Object.keys(statePayload.data.state.players).length).toBe(4);
+  });
+
+  test("party leave transfers leader and cleans up empty party", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/party/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: "leader-id",
+        playerName: "Leader",
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const partyId = createPayload.data.party.partyId as string;
+    const partyCode = createPayload.data.party.partyCode as string;
+
+    const joinResponse = await fetch(`${baseUrl}/api/party/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyCode,
+        playerId: "guest-id",
+        playerName: "Guest",
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+    expect(joinResponse.status).toBe(200);
+    expect(joinPayload.ok).toBe(true);
+
+    const leaveLeader = await fetch(`${baseUrl}/api/party/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: "leader-id",
+      }),
+    });
+    const leaveLeaderPayload = await leaveLeader.json();
+    expect(leaveLeader.status).toBe(200);
+    expect(leaveLeaderPayload.ok).toBe(true);
+    expect(leaveLeaderPayload.data.party.leaderPlayerId).toBe("guest-id");
+
+    const leaveGuest = await fetch(`${baseUrl}/api/party/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: "guest-id",
+      }),
+    });
+    const leaveGuestPayload = await leaveGuest.json();
+    expect(leaveGuest.status).toBe(200);
+    expect(leaveGuestPayload.ok).toBe(true);
+    expect(leaveGuestPayload.data.party).toBeNull();
+
+    const stateAfterDelete = await fetch(`${baseUrl}/api/party/state?partyId=${encodeURIComponent(partyId)}`);
+    const stateAfterDeletePayload = await stateAfterDelete.json();
+    expect(stateAfterDelete.status).toBe(404);
+    expect(stateAfterDeletePayload.ok).toBe(false);
+    expect(stateAfterDeletePayload.error.code).toBe("PARTY_NOT_FOUND");
+  });
+
+  test("realtime stream emits connected event for party members", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createPartyResponse = await fetch(`${baseUrl}/api/party/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "StreamLeader" }),
+    });
+    const createPartyPayload = await createPartyResponse.json();
+    const partyId = createPartyPayload.data.party.partyId as string;
+    const playerId = createPartyPayload.data.player.playerId as string;
+
+    const streamResponse = await fetch(
+      `${baseUrl}/api/realtime/stream?partyId=${encodeURIComponent(partyId)}&playerId=${encodeURIComponent(playerId)}`,
+    );
+    expect(streamResponse.status).toBe(200);
+    expect(streamResponse.headers.get("content-type")?.includes("text/event-stream")).toBe(true);
+
+    const reader = streamResponse.body?.getReader();
+    expect(reader).toBeDefined();
+    const firstChunk = await reader!.read();
+    expect(firstChunk.done).toBe(false);
+
+    const payloadText = new TextDecoder().decode(firstChunk.value);
+    expect(payloadText).toContain("event: connected");
+    expect(payloadText).toContain(`"partyId":"${partyId}"`);
+    expect(payloadText).toContain(`"playerId":"${playerId}"`);
+
+    await reader!.cancel();
+  });
 });
 
 describe("RPC API integration (supabase auth gate)", () => {
