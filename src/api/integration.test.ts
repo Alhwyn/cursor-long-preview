@@ -1337,6 +1337,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
   });
 
+  test("shoot targetId is trimmed before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimShootTarget" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "  z-missing  " },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(404);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
   test("out-of-range attack returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
