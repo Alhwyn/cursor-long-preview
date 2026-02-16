@@ -1320,6 +1320,102 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
   });
 
+  test("player can mint temporary agent access key and agent joins by key", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const ownerJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "AccessOwner" }),
+    });
+    const ownerJoinPayload = await ownerJoinResponse.json();
+    expect(ownerJoinResponse.status).toBe(201);
+    expect(ownerJoinPayload.ok).toBe(true);
+
+    const sessionId = ownerJoinPayload.data.sessionId as string;
+    const ownerPlayerId = ownerJoinPayload.data.playerId as string;
+
+    const grantResponse = await fetch(`${baseUrl}/api/agent/access-key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: ownerPlayerId,
+      }),
+    });
+    const grantPayload = await grantResponse.json();
+    expect(grantResponse.status).toBe(201);
+    expect(grantPayload.ok).toBe(true);
+    const accessKey = grantPayload.data.accessKey as string;
+    expect(accessKey.startsWith("agent_")).toBe(true);
+
+    const agentJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accessKey,
+        playerName: "Agent Ally",
+      }),
+    });
+    const agentJoinPayload = await agentJoinResponse.json();
+    expect(agentJoinResponse.status).toBe(200);
+    expect(agentJoinPayload.ok).toBe(true);
+    expect(agentJoinPayload.data.sessionId).toBe(sessionId);
+    expect(agentJoinPayload.data.playerName).toBe("Agent Ally");
+    expect(agentJoinPayload.data.playerId).not.toBe(ownerPlayerId);
+  });
+
+  test("agent access key is single-use and cannot be reused", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const ownerJoinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "AccessOwnerReuse" }),
+    });
+    const ownerJoinPayload = await ownerJoinResponse.json();
+    const sessionId = ownerJoinPayload.data.sessionId as string;
+    const ownerPlayerId = ownerJoinPayload.data.playerId as string;
+
+    const grantResponse = await fetch(`${baseUrl}/api/agent/access-key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: ownerPlayerId,
+      }),
+    });
+    const grantPayload = await grantResponse.json();
+    const accessKey = grantPayload.data.accessKey as string;
+
+    const firstJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accessKey,
+        playerName: "Agent Once",
+      }),
+    });
+    const firstJoinPayload = await firstJoin.json();
+    expect(firstJoin.status).toBe(200);
+    expect(firstJoinPayload.ok).toBe(true);
+
+    const secondJoin = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accessKey,
+        playerName: "Agent Twice",
+      }),
+    });
+    const secondJoinPayload = await secondJoin.json();
+    expect(secondJoin.status).toBe(401);
+    expect(secondJoinPayload.ok).toBe(false);
+    expect(secondJoinPayload.error.code).toBe("ACCESS_KEY_NOT_FOUND");
+  });
+
   test("non-object action payload returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

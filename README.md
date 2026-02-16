@@ -97,3 +97,25 @@ curl -s -X POST http://127.0.0.1:3000/api/game/join \
 ```
 
 The join response returns the agent `playerId` to use for `/api/game/observe` and `/api/game/action`.
+
+## Temporary Agent Access Key (recommended)
+
+For safer handoff during live play:
+
+1. In-session player mints temporary key:
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/agent/access-key \
+  -H "Content-Type: application/json" \
+  -d '{"session":"<SESSION_ID>","playerId":"<PLAYER_ID>"}'
+```
+
+2. Helper AI joins with the returned `accessKey`:
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/join \
+  -H "Content-Type: application/json" \
+  -d '{"accessKey":"<ACCESS_KEY>","playerName":"Agent Ally"}'
+```
+
+By default keys are temporary and single-use.

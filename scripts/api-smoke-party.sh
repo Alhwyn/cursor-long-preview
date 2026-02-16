@@ -47,6 +47,11 @@ ready_three_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-ready-three.json -
 ready_four_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-ready-four.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${player_four_id}\",\"ready\":true}")"
 
 start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\"}")"
+session_id="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())["data"]["sessionId"])')"
+agent_key_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-key.json -w "%{http_code}" -X POST "${BASE_URL}/api/agent/access-key" -H "Content-Type: application/json" -d "{\"session\":\"${session_id}\",\"playerId\":\"${leader_player_id}\"}")"
+agent_access_key="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-key.json").read_text())["data"]["accessKey"])')"
+agent_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d "{\"accessKey\":\"${agent_access_key}\",\"playerName\":\"SmokeAgent\"}")"
+agent_reuse_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-reuse.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d "{\"accessKey\":\"${agent_access_key}\",\"playerName\":\"SmokeAgentReuse\"}")"
 party_state_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-state.json -w "%{http_code}" "${BASE_URL}/api/party/state?partyId=${party_id}")"
 
 python3 - <<'PY' \
@@ -54,7 +59,7 @@ python3 - <<'PY' \
   "${join_two_status}" "${join_three_status}" "${join_four_status}" "${overflow_join_status}" \
   "${non_leader_start_status}" "${not_ready_start_status}" \
   "${ready_one_status}" "${ready_two_status}" "${ready_three_status}" "${ready_four_status}" \
-  "${start_status}" "${party_state_status}"
+  "${start_status}" "${agent_key_status}" "${agent_join_status}" "${agent_reuse_status}" "${party_state_status}"
 import json
 import pathlib
 import sys
@@ -71,12 +76,18 @@ ready_two_status = int(sys.argv[9])
 ready_three_status = int(sys.argv[10])
 ready_four_status = int(sys.argv[11])
 start_status = int(sys.argv[12])
-party_state_status = int(sys.argv[13])
+agent_key_status = int(sys.argv[13])
+agent_join_status = int(sys.argv[14])
+agent_reuse_status = int(sys.argv[15])
+party_state_status = int(sys.argv[16])
 
 overflow_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-overflow-join.json").read_text())
 non_leader_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-nonleader-start.json").read_text())
 not_ready_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-notready-start.json").read_text())
 start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())
+agent_key_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-key.json").read_text())
+agent_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-join.json").read_text())
+agent_reuse_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-reuse.json").read_text())
 party_state_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-state.json").read_text())
 stream_preview = pathlib.Path("/tmp/rpc-zombie-smoke-party-stream.txt").read_text()
 
@@ -113,10 +124,27 @@ assert len(start_payload["data"]["state"]["players"]) == 4, "party-started sessi
 assert start_payload["data"]["state"]["companion"]["name"] == "CAI", "party-started session should include CAI companion"
 assert start_payload["data"]["state"]["mode"] == "endless", "party-started session should default to endless mode"
 
+assert agent_key_status == 201, f"agent access key create should be 201, got {agent_key_status}"
+assert agent_key_payload["ok"] is True, "agent key payload should succeed"
+assert agent_key_payload["data"]["sessionId"] == start_payload["data"]["sessionId"], "agent key session mismatch"
+assert isinstance(agent_key_payload["data"]["accessKey"], str) and agent_key_payload["data"]["accessKey"].startswith("agent_"), (
+    "agent key should be returned with expected prefix"
+)
+
+assert agent_join_status == 200, f"agent join by key should be 200, got {agent_join_status}"
+assert agent_join_payload["ok"] is True, "agent join payload should succeed"
+assert agent_join_payload["data"]["sessionId"] == start_payload["data"]["sessionId"], "agent join should target started session"
+
+assert agent_reuse_status == 401, f"agent key reuse should be 401, got {agent_reuse_status}"
+assert agent_reuse_payload["ok"] is False, "agent key reuse payload should fail"
+assert agent_reuse_payload["error"]["code"] == "ACCESS_KEY_NOT_FOUND", (
+    f"unexpected agent key reuse error: {agent_reuse_payload['error']['code']}"
+)
+
 assert party_state_status == 200, f"party state should be 200, got {party_state_status}"
 assert party_state_payload["ok"] is True, "party state payload should succeed"
 assert party_state_payload["data"]["party"]["sessionId"] == start_payload["data"]["sessionId"], "party state session mismatch"
-assert len(party_state_payload["data"]["state"]["players"]) == 4, "party state should include four players"
+assert len(party_state_payload["data"]["state"]["players"]) == 5, "party state should include four players plus joined agent"
 assert party_state_payload["data"]["state"]["companion"]["name"] == "CAI", "party state should expose CAI companion"
 assert party_state_payload["data"]["state"]["mode"] == "endless", "party state should remain endless mode"
 

@@ -41,6 +41,28 @@ curl -s -X POST http://127.0.0.1:3000/api/game/join \
 
 Use this after a leader starts party match and shares `sessionId`.
 
+### Create Temporary Agent Access Key
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/agent/access-key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session":"<SESSION_ID>",
+    "playerId":"<ISSUER_PLAYER_ID>"
+  }'
+```
+
+### Join by Temporary Access Key
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/join \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accessKey":"<ACCESS_KEY>",
+    "playerName":"Agent Ally"
+  }'
+```
+
 ### Observe
 
 ```bash
@@ -134,6 +156,8 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 - `PARTY_NOT_READY` -> ensure every party member marked ready before leader starts.
 - `PARTY_NOT_LEADER` -> call `POST /api/party/start` with leader `playerId`.
 - `PARTY_FULL` -> party already has 4 members.
+- `ACCESS_KEY_NOT_FOUND` / `ACCESS_KEY_EXPIRED` / `ACCESS_KEY_EXHAUSTED` -> request a fresh temporary key from an in-session player.
+- `ACCESS_KEY_SESSION_MISMATCH` -> provided `session` does not match the key's bound session.
 - `TARGET_OUT_OF_RANGE` -> move first.
 - `ATTACK_COOLDOWN` -> move or wait one turn.
 - `MOVE_BLOCKED` / `MOVE_OCCUPIED` -> pick alternate direction.

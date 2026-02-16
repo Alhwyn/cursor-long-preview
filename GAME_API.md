@@ -41,6 +41,7 @@ Request:
 {
   "playerName": "Scout",
   "session": "optional-existing-session-id",
+  "accessKey": "optional-temporary-agent-access-key",
   "playerId": "optional-player-id",
   "serverId": "optional-server-id",
   "zombieCount": 4,
@@ -52,6 +53,8 @@ Request:
 `agentEnabled` is optional boolean (when true on new session, spawns CAI combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
+If `accessKey` is provided, session is resolved from the key unless explicit `session` is also provided.
+When both are provided, session must match the key (`409 ACCESS_KEY_SESSION_MISMATCH`).
 If `playerId` is omitted:
 - new session defaults to `p-<sessionId>-1`
 - subsequent joins default to `p-2`, `p-3`, ...
@@ -92,6 +95,12 @@ For user-controlled helper agents:
 
 3. Agent stores returned `playerId` and continues with `/api/game/observe` + `/api/game/action`.
 
+#### Secure agent handoff pattern (temporary `accessKey`)
+
+1. Existing in-session player mints key via `POST /api/agent/access-key`.
+2. Share key with helper AI.
+3. Helper AI joins via `POST /api/game/join` with `{ "accessKey":"..." }`.
+
 ---
 
 ### `GET /api/game/state?session=<sessionId>`
@@ -111,6 +120,43 @@ Response:
       "tick": 3,
       "status": "active"
     }
+  }
+}
+```
+
+---
+
+### `POST /api/agent/access-key`
+
+Create a temporary key that lets an external helper AI join the same active session.
+
+Request:
+
+```json
+{
+  "session": "uuid",
+  "playerId": "existing-player-id",
+  "ttlSeconds": 900,
+  "maxUses": 1
+}
+```
+
+- `session` and `playerId` are required and must refer to an existing in-session player.
+- `ttlSeconds` is optional (`30..21600`, integer).
+- `maxUses` is optional (`1..16`, integer), defaults to `1`.
+
+Response (`201`):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionId": "uuid",
+    "issuedByPlayerId": "p-1",
+    "accessKey": "agent_...",
+    "expiresAt": 1730000000000,
+    "maxUses": 1,
+    "remainingUses": 1
   }
 }
 ```
@@ -476,8 +522,10 @@ Use this stream for party/lobby sync and in-match state push updates.
 ## Common Error Codes
 
 - `INVALID_JSON`, `INVALID_BODY`, `INVALID_FIELD`
+- `INVALID_ACCESS_KEY_TTL`, `INVALID_ACCESS_KEY_MAX_USES`
 - `MISSING_QUERY`, `MISSING_SERVER_ID`, `INVALID_ACTION`, `INVALID_DIRECTION`, `INVALID_ZOMBIE_COUNT`
 - `SESSION_NOT_FOUND`, `SESSION_SERVER_MISMATCH`, `PLAYER_NOT_FOUND`, `TARGET_NOT_FOUND`, `SERVER_NOT_FOUND`
+- `ACCESS_KEY_NOT_FOUND`, `ACCESS_KEY_EXPIRED`, `ACCESS_KEY_EXHAUSTED`, `ACCESS_KEY_SESSION_MISMATCH`
 - `PARTY_NOT_FOUND`, `PARTY_MEMBER_NOT_FOUND`, `PARTY_NOT_LEADER`
 - `PARTY_FULL`, `PARTY_NOT_OPEN`, `PARTY_NOT_READY`, `PARTY_MEMBER_EXISTS`
 - `PLAYER_DEAD`, `MOVE_BLOCKED`, `MOVE_OCCUPIED`, `TARGET_OUT_OF_RANGE`, `ATTACK_COOLDOWN`, `SERVER_FULL`, `GAME_COMPLETED`

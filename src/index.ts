@@ -26,6 +26,11 @@ import {
   setActiveSessionId,
 } from "./game/servers";
 import {
+  consumeAgentAccessKey,
+  getAgentAccessGrant,
+  issueAgentAccessKey,
+} from "./game/agent-access";
+import {
   createParty,
   getParty,
   getPartyBySessionId,
@@ -77,8 +82,14 @@ function mapDomainError(errorValue: unknown): HttpError {
     case "INVALID_MAX_PLAYERS":
     case "INVALID_ZOMBIE_COUNT":
     case "INVALID_PARTY_CODE":
+    case "INVALID_ACCESS_KEY_TTL":
+    case "INVALID_ACCESS_KEY_MAX_USES":
     case "NO_SPAWN":
       return new HttpError(400, errorValue.code, errorValue.message);
+    case "ACCESS_KEY_NOT_FOUND":
+    case "ACCESS_KEY_EXPIRED":
+    case "ACCESS_KEY_EXHAUSTED":
+      return new HttpError(401, errorValue.code, errorValue.message);
     case "GAME_COMPLETED":
     case "PLAYER_DEAD":
     case "ATTACK_COOLDOWN":
@@ -179,15 +190,27 @@ function parseGameMode(value: unknown): "classic" | "endless" | undefined {
 async function createOrJoinGameSession(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
-  const existingSessionId = optionalNonEmptyString(body.session, "session");
+  const requestedSessionId = optionalNonEmptyString(body.session, "session");
   const playerId = optionalNonEmptyString(body.playerId, "playerId");
   const playerName = optionalString(body.playerName, "playerName");
   const serverId = optionalNonEmptyString(body.serverId, "serverId");
+  const accessKey = optionalNonEmptyString(body.accessKey, "accessKey");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled");
   const gameMode = parseGameMode(body.gameMode);
 
   try {
+    const accessGrant = accessKey ? getAgentAccessGrant(accessKey) : null;
+    const existingSessionId = requestedSessionId ?? accessGrant?.sessionId;
+
+    if (requestedSessionId && accessGrant && requestedSessionId !== accessGrant.sessionId) {
+      throw new HttpError(
+        409,
+        "ACCESS_KEY_SESSION_MISMATCH",
+        `Access key is bound to session "${accessGrant.sessionId}", not "${requestedSessionId}".`,
+      );
+    }
+
     if (existingSessionId) {
       const existingSession = getSession(existingSessionId);
       if (serverId && existingSession && existingSession.serverId !== serverId) {
@@ -213,6 +236,9 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
         playerId,
         playerName,
       });
+      if (accessKey) {
+        consumeAgentAccessKey(accessKey);
+      }
       if (session.serverId) {
         await recordServerJoin(session.serverId, player.id, player.name);
       }
@@ -256,6 +282,46 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
         playerName: player.name,
         state: session.state,
         observation: observeSession(session.sessionId, player.id),
+      },
+      201,
+    );
+  } catch (errorValue) {
+    throw mapDomainError(errorValue);
+  }
+}
+
+async function createAgentAccessGrant(request: Request): Promise<Response> {
+  const rawBody = await parseJsonBody(request);
+  const body = requireObject(rawBody);
+  const sessionId = requireString(body.session, "session");
+  const playerId = requireString(body.playerId, "playerId");
+  const ttlSeconds = optionalNumber(body.ttlSeconds, "ttlSeconds");
+  const maxUses = optionalNumber(body.maxUses, "maxUses");
+
+  try {
+    const session = getSession(sessionId);
+    if (!session) {
+      throw new GameRuleError("SESSION_NOT_FOUND", `Session "${sessionId}" was not found.`);
+    }
+    if (!session.state.players[playerId]) {
+      throw new GameRuleError("PLAYER_NOT_FOUND", `Player "${playerId}" was not found in this session.`);
+    }
+
+    const grant = issueAgentAccessKey({
+      sessionId,
+      issuedByPlayerId: playerId,
+      ttlSeconds,
+      maxUses,
+    });
+
+    return ok(
+      {
+        sessionId: grant.sessionId,
+        issuedByPlayerId: grant.issuedByPlayerId,
+        accessKey: grant.accessKey,
+        expiresAt: grant.expiresAt,
+        maxUses: grant.maxUses,
+        remainingUses: grant.remainingUses,
       },
       201,
     );
@@ -662,6 +728,9 @@ const server = serve({
   routes: {
     "/api/game/join": {
       POST: req => withErrorBoundary(() => createOrJoinGameSession(req)),
+    },
+    "/api/agent/access-key": {
+      POST: req => withErrorBoundary(() => createAgentAccessGrant(req)),
     },
     "/api/game/state": {
       GET: req => withErrorBoundary(() => getGameStateBySession(req)),

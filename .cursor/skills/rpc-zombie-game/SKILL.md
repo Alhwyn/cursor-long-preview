@@ -41,6 +41,23 @@ Notes:
 - If the shared session is full (server-linked flow), join may return `SERVER_FULL`.
 - If session is invalid/finished, re-bootstrap through party/lobby flow.
 
+## Secure Agent Handoff (temporary access key)
+
+When a player wants to authorize an external AI safely during an active game:
+
+1. Player requests a temporary key:
+   - `POST /api/agent/access-key`
+   - body: `{ "session":"<SESSION_ID>", "playerId":"<PLAYER_ID>" }`
+2. Share returned `accessKey` with the helper AI.
+3. Helper AI joins without exposing raw session control:
+   - `POST /api/game/join`
+   - body: `{ "accessKey":"<ACCESS_KEY>", "playerName":"Agent Ally" }`
+4. Helper AI then uses normal observe/action loop.
+
+Default behavior:
+- key is temporary (`ttlSeconds` supported)
+- key is single-use unless `maxUses` is explicitly increased by issuer
+
 ## Multiplayer / Lobby Flow
 
 1. `GET /api/servers` for available servers.
