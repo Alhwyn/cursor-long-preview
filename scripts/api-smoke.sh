@@ -85,6 +85,9 @@ null_terminatorcount_with_invalid_zombiecount_type_status="$(curl -sS -o /tmp/rp
 fractional_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"FractionalTerminatorCountSmoke","terminatorCount":1.5}')"
+fractional_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"FractionalZombieCountSmoke","zombieCount":1.5}')"
 fractional_terminatorcount_with_valid_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminatorcount-with-valid-zombiecount-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"FractionalTerminatorCountWithValidZombieCountSmoke","zombieCount":4,"terminatorCount":1.5}')"
@@ -106,6 +109,9 @@ negative_zombiecount_with_valid_terminatorcount_status="$(curl -sS -o /tmp/rpc-z
 out_of_range_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"OutOfRangeTerminatorCountSmoke","terminatorCount":33}')"
+out_of_range_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"OutOfRangeZombieCountSmoke","zombieCount":33}')"
 low_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-low-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"LowTerminatorCountSmoke","terminatorCount":0}')"
@@ -142,6 +148,9 @@ matching_invalid_type_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-
 string_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-string-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"StringTerminatorCountSmoke","terminatorCount":"4"}')"
+string_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-string-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"StringZombieCountSmoke","zombieCount":"4"}')"
 
 action_status="$(curl -sS -o /tmp/rpc-zombie-smoke-action.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
@@ -594,6 +603,50 @@ assert string_terminator_count_join_payload["ok"] is False, "string terminatorCo
 assert string_terminator_count_join_payload["error"]["code"] == "INVALID_FIELD", (
     "string terminatorCount join code mismatch: "
     f"{string_terminator_count_join_payload['error']['code']}"
+)
+PY
+
+python3 - <<'PY' "${fractional_zombie_count_join_status}" "${out_of_range_zombie_count_join_status}" "${string_zombie_count_join_status}"
+import json
+import pathlib
+import sys
+
+fractional_zombie_count_join_status = int(sys.argv[1])
+out_of_range_zombie_count_join_status = int(sys.argv[2])
+string_zombie_count_join_status = int(sys.argv[3])
+fractional_zombie_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-fractional-zombie-count-join.json").read_text()
+)
+out_of_range_zombie_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-zombie-count-join.json").read_text()
+)
+string_zombie_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-string-zombie-count-join.json").read_text()
+)
+
+assert fractional_zombie_count_join_status == 400, (
+    f"fractional zombieCount join should be 400, got {fractional_zombie_count_join_status}"
+)
+assert fractional_zombie_count_join_payload["ok"] is False, "fractional zombieCount join payload should fail"
+assert fractional_zombie_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "fractional zombieCount join code mismatch: "
+    f"{fractional_zombie_count_join_payload['error']['code']}"
+)
+assert out_of_range_zombie_count_join_status == 400, (
+    f"out-of-range zombieCount join should be 400, got {out_of_range_zombie_count_join_status}"
+)
+assert out_of_range_zombie_count_join_payload["ok"] is False, "out-of-range zombieCount join payload should fail"
+assert out_of_range_zombie_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "out-of-range zombieCount join code mismatch: "
+    f"{out_of_range_zombie_count_join_payload['error']['code']}"
+)
+assert string_zombie_count_join_status == 400, (
+    f"string zombieCount join should be 400, got {string_zombie_count_join_status}"
+)
+assert string_zombie_count_join_payload["ok"] is False, "string zombieCount join payload should fail"
+assert string_zombie_count_join_payload["error"]["code"] == "INVALID_FIELD", (
+    "string zombieCount join code mismatch: "
+    f"{string_zombie_count_join_payload['error']['code']}"
 )
 PY
 
