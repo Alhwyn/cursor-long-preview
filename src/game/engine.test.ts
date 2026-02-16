@@ -360,6 +360,16 @@ describe("engine", () => {
     expect(next.players["p-1"]?.facing).toBe("right");
   });
 
+  test("shoot targetId takes precedence over provided direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "z-1", direction: "right" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("left");
+  });
+
   test("shoot miss still consumes cooldown", () => {
     const state = makeState();
     state.players["p-1"]!.facing = "left";
@@ -395,6 +405,21 @@ describe("engine", () => {
     expect(turret).toBeDefined();
     expect(afterBuild.scrap).toBe(140);
     expect(afterBuild.zombies["z-1"]?.hp).toBeLessThan(70);
+  });
+
+  test("build turret rejects occupied target tile and preserves scrap", () => {
+    const state = makeState();
+    state.scrap = 200;
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    expect(() =>
+      applyAction(state, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction: "right",
+      }),
+    ).toThrow("occupied tile");
+    expect(state.scrap).toBe(200);
   });
 
   test("build turret enforces active turret cap", () => {
