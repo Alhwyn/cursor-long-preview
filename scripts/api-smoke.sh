@@ -60,6 +60,9 @@ invalid_attack_target_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-attack
 blank_attack_target_status="$(curl -sS -o /tmp/rpc-zombie-smoke-blank-attack-target.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"   \"}}")"
+blank_shoot_target_status="$(curl -sS -o /tmp/rpc-zombie-smoke-blank-shoot-target.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
+  -H "Content-Type: application/json" \
+  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"targetId\":\"   \"}}")"
 turret_no_scrap_status="$(curl -sS -o /tmp/rpc-zombie-smoke-turret-no-scrap.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"build\",\"buildType\":\"turret\",\"direction\":\"right\"}}")"
@@ -135,7 +138,7 @@ duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-on
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${shoot_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${turret_no_scrap_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${observe_alias_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${unknown_action_session_status}" "${unknown_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}" "${invalid_server_maxplayers_low_status}" "${invalid_server_maxplayers_high_status}" "${invalid_server_maxplayers_fractional_status}" "${trimmed_route_server_join_status}" "${blank_route_server_join_status}" "${unknown_action_player_status}" "${unknown_target_attack_status}" "${second_shoot_status}" "${invalid_shoot_direction_status}" "${unknown_target_shoot_status}" "${target_precedence_shoot_status}" "${trimmed_target_precedence_shoot_status}"
+python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${shoot_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${turret_no_scrap_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${observe_alias_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${unknown_action_session_status}" "${unknown_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}" "${invalid_server_maxplayers_low_status}" "${invalid_server_maxplayers_high_status}" "${invalid_server_maxplayers_fractional_status}" "${trimmed_route_server_join_status}" "${blank_route_server_join_status}" "${unknown_action_player_status}" "${unknown_target_attack_status}" "${second_shoot_status}" "${invalid_shoot_direction_status}" "${unknown_target_shoot_status}" "${target_precedence_shoot_status}" "${trimmed_target_precedence_shoot_status}" "${blank_shoot_target_status}"
 import json
 import pathlib
 import sys
@@ -197,6 +200,7 @@ invalid_shoot_direction_status = int(sys.argv[54])
 unknown_target_shoot_status = int(sys.argv[55])
 target_precedence_shoot_status = int(sys.argv[56])
 trimmed_target_precedence_shoot_status = int(sys.argv[57])
+blank_shoot_target_status = int(sys.argv[58])
 missing_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-server.json").read_text())
 join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-join-server.json").read_text())
 missing_join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-join-server.json").read_text())
@@ -244,6 +248,7 @@ target_precedence_shoot_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke
 trimmed_target_precedence_shoot_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-trimmed-target-precedence-shoot.json").read_text()
 )
+blank_shoot_target_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-blank-shoot-target.json").read_text())
 out_of_range_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-attack.json").read_text())
 unknown_target_attack_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-unknown-target-attack.json").read_text())
 missing_state_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-state.json").read_text())
@@ -300,6 +305,7 @@ assert blank_player_id_status == 400, f"blank playerId should be 400, got {blank
 assert missing_direction_status == 400, f"move without direction should be 400, got {missing_direction_status}"
 assert invalid_attack_target_status == 400, f"attack with invalid target type should be 400, got {invalid_attack_target_status}"
 assert blank_attack_target_status == 400, f"attack with blank targetId should be 400, got {blank_attack_target_status}"
+assert blank_shoot_target_status == 400, f"shoot with blank targetId should be 400, got {blank_shoot_target_status}"
 assert turret_no_scrap_status == 409, f"turret build without scrap should be 409, got {turret_no_scrap_status}"
 assert fractional_zombie_count_status == 400, f"fractional zombieCount should be 400, got {fractional_zombie_count_status}"
 assert out_of_range_zombie_count_status == 400, (
@@ -405,6 +411,10 @@ assert invalid_attack_target_payload["ok"] is False, "invalid attack target payl
 assert invalid_attack_target_payload["error"]["code"] == "INVALID_FIELD", f"invalid attack target code mismatch: {invalid_attack_target_payload['error']['code']}"
 assert blank_attack_target_payload["ok"] is False, "blank attack target payload should be failure"
 assert blank_attack_target_payload["error"]["code"] == "INVALID_FIELD", f"blank attack target code mismatch: {blank_attack_target_payload['error']['code']}"
+assert blank_shoot_target_payload["ok"] is False, "blank shoot target payload should be failure"
+assert blank_shoot_target_payload["error"]["code"] == "INVALID_FIELD", (
+    f"blank shoot target code mismatch: {blank_shoot_target_payload['error']['code']}"
+)
 assert fractional_zombie_count_payload["ok"] is False, "fractional zombieCount payload should be failure"
 assert fractional_zombie_count_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", f"fractional zombieCount code mismatch: {fractional_zombie_count_payload['error']['code']}"
 assert out_of_range_zombie_count_payload["ok"] is False, "out-of-range zombieCount payload should be failure"

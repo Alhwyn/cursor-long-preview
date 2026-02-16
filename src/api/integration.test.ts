@@ -534,6 +534,21 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackBlankTarget.status).toBe(400);
     expect(attackBlankTargetPayload.ok).toBe(false);
     expect(attackBlankTargetPayload.error.code).toBe("INVALID_FIELD");
+
+    const shootBlankTarget = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: "   " },
+      }),
+    });
+    const shootBlankTargetPayload = await shootBlankTarget.json();
+
+    expect(shootBlankTarget.status).toBe(400);
+    expect(shootBlankTargetPayload.ok).toBe(false);
+    expect(shootBlankTargetPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("fractional zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
