@@ -1,5 +1,6 @@
 import RaycastShooterCanvas from "./RaycastShooterCanvas";
 import DirectSessionPanel from "./components/DirectSessionPanel";
+import GameHeroPanel from "./components/GameHeroPanel";
 import HudPanel from "./components/HudPanel";
 import ObservationPanel from "./components/ObservationPanel";
 import PartyLobbyPanel from "./components/PartyLobbyPanel";
@@ -53,12 +54,7 @@ export function GameView() {
 
   return (
     <div className="w-full max-w-[1500px] mx-auto p-4 md:p-6 text-slate-100">
-      <div className="rounded-2xl border border-emerald-400/20 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-5 mb-4 shadow-[0_0_60px_rgba(16,185,129,0.08)]">
-        <h1 className="text-3xl md:text-4xl font-semibold mb-2 tracking-tight">Terminator Robot Defense 3D</h1>
-        <p className="text-slate-300">
-          Cute co-op shooter where survivors, Claude Bot, and your buildables fight off hostile terminator robots.
-        </p>
-      </div>
+      <GameHeroPanel />
 
       <div className="grid gap-4 lg:grid-cols-[1.8fr_1fr]">
         <section className="space-y-4">
