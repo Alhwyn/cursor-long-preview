@@ -1163,6 +1163,46 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("null zombieCount takes precedence over low terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithLowTerminatorCount",
+        zombieCount: null,
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount takes precedence over negative terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithNegativeTerminatorCount",
+        zombieCount: null,
+        terminatorCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("null zombieCount takes precedence over fractional terminatorCount", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1252,6 +1292,46 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         playerName: "NullTerminatorCountWithOutOfRangeZombieCount",
         zombieCount: 33,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over low zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithLowZombieCount",
+        zombieCount: 0,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over negative zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithNegativeZombieCount",
+        zombieCount: -1,
         terminatorCount: null,
       }),
     });
@@ -4687,6 +4767,56 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("party start null zombieCount takes precedence over low terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithLowTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount takes precedence over negative terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithNegativeTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("party start null zombieCount takes precedence over fractional terminatorCount", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -4802,6 +4932,56 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         zombieCount: 33,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over low zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithLowZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over negative zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithNegativeZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: -1,
         terminatorCount: null,
       }),
     });
