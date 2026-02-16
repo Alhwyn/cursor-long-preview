@@ -178,6 +178,8 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 - `INVALID_ZOMBIE_COUNT` -> retry with integer `terminatorCount` (or legacy `zombieCount`) in `[1, 32]`.
 - `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `attack.targetId`, `shoot.targetId`) are non-empty strings when supplied (surrounding whitespace is trimmed by server).
 - `INVALID_FIELD` also covers explicit `null` for `terminatorCount` / `zombieCount`, including single-field requests.
+- Matching dual-field numeric-invalid counts (for example `33/33`, `0/0`, `-1/-1`, `1.5/1.5`) return `INVALID_ZOMBIE_COUNT`.
+- Matching dual-field non-numeric counts (for example `"4"/"4"`) return `INVALID_FIELD`.
 - `MISSING_SERVER_ID` -> ensure `POST /api/servers/:id/join` includes a non-empty `:id` path segment; surrounding whitespace is trimmed by server.
 - `PARTY_NOT_READY` -> ensure every party member marked ready before leader starts.
 - `PARTY_NOT_LEADER` -> call `POST /api/party/start` with leader `playerId`.

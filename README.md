@@ -27,6 +27,20 @@ Server-authoritative terminator survival game with:
   - `2` ally robot
   - `3` turret
 
+## Spawn Count Fields (`terminatorCount` / `zombieCount`)
+
+- Preferred field: `terminatorCount`
+- Legacy alias: `zombieCount` (still supported)
+- Allowed numeric values: integers `1..32`
+- If both fields are provided:
+  - they must match
+  - both are validated independently
+
+Validation behavior summary:
+
+- `INVALID_FIELD` for non-numeric inputs (including `null`) and alias mismatches.
+- `INVALID_ZOMBIE_COUNT` for numeric-but-invalid values (fractional, low/negative, out of range), including matching invalid pairs like `33/33` or `1.5/1.5`.
+
 ## Install
 
 ```bash

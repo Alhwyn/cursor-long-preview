@@ -91,6 +91,8 @@ Default behavior:
 - `terminatorCount` is the preferred spawn-count field; `zombieCount` is a legacy alias.
 - If both `terminatorCount` and `zombieCount` are provided, they must match and each field is validated independently.
 - Explicit `null` for either count field is invalid (`INVALID_FIELD`) even when the other alias is omitted.
+- Matching dual-field numeric-invalid values (for example `33/33`, `0/0`, `-1/-1`, `1.5/1.5`) return `INVALID_ZOMBIE_COUNT`.
+- Matching dual-field non-numeric values (for example `"4"/"4"`) return `INVALID_FIELD`.
 - Optional identifiers (`session`, `serverId`, `playerId`, observe `player`, `attack.targetId`, `shoot.targetId`) must be non-empty strings when provided; blank strings return `INVALID_FIELD`.
 - Identifier values are trimmed server-side before lookup; `"  abc  "` is treated as `"abc"`.
 - Lobby join route identifiers are trimmed server-side too; `/api/servers/%20<id>%20/join` resolves to `<id>`, while blank route IDs return `MISSING_SERVER_ID`.
