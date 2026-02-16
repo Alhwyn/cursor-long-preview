@@ -264,6 +264,10 @@ Response:
 ```
 
 Behavior note:
+- `attack` can auto-select nearest living robot when `targetId` is omitted.
+- If explicit `attack.targetId` is missing or already destroyed, the action fails with `TARGET_NOT_FOUND`.
+- If explicit `attack.targetId` is out of range, the action fails with `TARGET_OUT_OF_RANGE`.
+- Attack cooldown validation runs before explicit target existence checks, so rapid follow-up attacks can return `ATTACK_COOLDOWN` even when `targetId` is invalid.
 - `shoot` fires along facing direction (or provided direction).
 - When both `shoot.targetId` and `shoot.direction` are provided, `targetId` targeting takes precedence for hit resolution and facing.
 - When `shoot.direction` is provided, the player's facing updates to that direction even if the shot misses.
