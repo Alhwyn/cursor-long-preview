@@ -512,6 +512,7 @@ Request:
 
 `terminatorCount` is the preferred spawn-count field for party starts.
 `zombieCount` remains a legacy alias; when both are provided they must match.
+Both fields, when provided, must be integers from `1` to `32`.
 
 Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.
