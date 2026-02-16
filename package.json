@@ -6,9 +6,15 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "NODE_ENV=production bun src/index.ts",
-    "build": "bun run build.ts"
+    "build": "bun run build.ts",
+    "test": "bun test",
+    "smoke:api": "./scripts/api-smoke.sh",
+    "smoke:api:party": "./scripts/api-smoke-party.sh",
+    "smoke:api:supabase-auth": "./scripts/api-smoke-supabase-auth.sh",
+    "verify": "./scripts/verify.sh"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "bun-plugin-tailwind": "^0.1.2",
     "react": "^19",
     "react-dom": "^19",
