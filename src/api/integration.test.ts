@@ -4673,6 +4673,27 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("party start rejects fractional zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasFractionalZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("party start rejects fractional terminatorCount even when zombieCount is valid", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -4844,6 +4865,27 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("party start rejects out-of-range zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasRangeZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("party start rejects non-number terminatorCount", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -4857,6 +4899,27 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         terminatorCount: "4",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects non-number zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasTypeZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "4",
       }),
     });
     const startPayload = await startResponse.json();

@@ -50,6 +50,7 @@ mismatched_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-mismatc
 boundary_mismatched_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-boundary-mismatched-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":1,\"terminatorCount\":32}")"
 reversed_boundary_mismatched_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-reversed-boundary-mismatched-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":32,\"terminatorCount\":1}")"
 fractional_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-fractional-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":1.5}")"
+fractional_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-fractional-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":1.5}")"
 fractional_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-fractional-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":1.5}")"
 fractional_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-fractional-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":1.5,\"terminatorCount\":2}")"
 low_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-low-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":0}")"
@@ -57,11 +58,13 @@ low_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-
 negative_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":-1}")"
 negative_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":-1,\"terminatorCount\":2}")"
 out_of_range_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-out-of-range-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":33}")"
+out_of_range_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-out-of-range-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":33}")"
 low_terminator_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-low-terminator-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":0}")"
 negative_terminator_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-terminator-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":-1}")"
 low_zombie_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-low-zombie-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":0}")"
 negative_zombie_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-zombie-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":-1}")"
 string_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-string-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":\"4\"}")"
+string_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-string-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":\"4\"}")"
 invalid_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":\"2\",\"terminatorCount\":2}")"
 invalid_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":\"2\"}")"
 null_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-null-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":null,\"terminatorCount\":2}")"
@@ -593,6 +596,54 @@ assert negative_zombie_count_start_payload["ok"] is False, "negative zombieCount
 assert negative_zombie_count_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
     "unexpected negative zombieCount start code: "
     f"{negative_zombie_count_start_payload['error']['code']}"
+)
+PY
+
+python3 - <<'PY' "${fractional_zombiecount_start_status}" "${out_of_range_zombiecount_start_status}" "${string_zombiecount_start_status}"
+import json
+import pathlib
+import sys
+
+fractional_zombiecount_start_status = int(sys.argv[1])
+out_of_range_zombiecount_start_status = int(sys.argv[2])
+string_zombiecount_start_status = int(sys.argv[3])
+fractional_zombiecount_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-fractional-zombiecount-start.json").read_text()
+)
+out_of_range_zombiecount_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-out-of-range-zombiecount-start.json").read_text()
+)
+string_zombiecount_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-string-zombiecount-start.json").read_text()
+)
+
+assert fractional_zombiecount_start_status == 400, (
+    f"party start with fractional zombieCount should be 400, got {fractional_zombiecount_start_status}"
+)
+assert fractional_zombiecount_start_payload["ok"] is False, (
+    "fractional zombieCount start payload should fail"
+)
+assert fractional_zombiecount_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected fractional zombieCount start code: "
+    f"{fractional_zombiecount_start_payload['error']['code']}"
+)
+assert out_of_range_zombiecount_start_status == 400, (
+    f"party start with out-of-range zombieCount should be 400, got {out_of_range_zombiecount_start_status}"
+)
+assert out_of_range_zombiecount_start_payload["ok"] is False, (
+    "out-of-range zombieCount start payload should fail"
+)
+assert out_of_range_zombiecount_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected out-of-range zombieCount start code: "
+    f"{out_of_range_zombiecount_start_payload['error']['code']}"
+)
+assert string_zombiecount_start_status == 400, (
+    f"party start with non-number zombieCount should be 400, got {string_zombiecount_start_status}"
+)
+assert string_zombiecount_start_payload["ok"] is False, "non-number zombieCount start payload should fail"
+assert string_zombiecount_start_payload["error"]["code"] == "INVALID_FIELD", (
+    "unexpected non-number zombieCount start code: "
+    f"{string_zombiecount_start_payload['error']['code']}"
 )
 PY
 
