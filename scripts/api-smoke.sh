@@ -52,6 +52,12 @@ null_terminatorcount_without_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-s
 both_null_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-both-null-count-aliases.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"BothNullCountAliasesSmoke","zombieCount":null,"terminatorCount":null}')"
+null_zombiecount_with_out_of_range_terminatorcount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-null-zombiecount-with-out-of-range-terminatorcount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"NullZombieCountWithOutOfRangeTerminatorCountSmoke","zombieCount":null,"terminatorCount":33}')"
+null_terminatorcount_with_out_of_range_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-null-terminatorcount-with-out-of-range-zombiecount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"NullTerminatorCountWithOutOfRangeZombieCountSmoke","zombieCount":33,"terminatorCount":null}')"
 fractional_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"FractionalTerminatorCountSmoke","terminatorCount":1.5}')"
@@ -540,7 +546,7 @@ assert string_terminator_count_join_payload["error"]["code"] == "INVALID_FIELD",
 )
 PY
 
-python3 - <<'PY' "${null_zombiecount_with_valid_terminatorcount_status}" "${null_terminatorcount_with_valid_zombiecount_status}" "${null_zombiecount_without_terminatorcount_status}" "${null_terminatorcount_without_zombiecount_status}" "${both_null_count_aliases_status}"
+python3 - <<'PY' "${null_zombiecount_with_valid_terminatorcount_status}" "${null_terminatorcount_with_valid_zombiecount_status}" "${null_zombiecount_without_terminatorcount_status}" "${null_terminatorcount_without_zombiecount_status}" "${both_null_count_aliases_status}" "${null_zombiecount_with_out_of_range_terminatorcount_status}" "${null_terminatorcount_with_out_of_range_zombiecount_status}"
 import json
 import pathlib
 import sys
@@ -550,6 +556,8 @@ null_terminatorcount_with_valid_zombiecount_status = int(sys.argv[2])
 null_zombiecount_without_terminatorcount_status = int(sys.argv[3])
 null_terminatorcount_without_zombiecount_status = int(sys.argv[4])
 both_null_count_aliases_status = int(sys.argv[5])
+null_zombiecount_with_out_of_range_terminatorcount_status = int(sys.argv[6])
+null_terminatorcount_with_out_of_range_zombiecount_status = int(sys.argv[7])
 null_zombiecount_with_valid_terminatorcount_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-null-zombiecount-with-valid-terminatorcount.json").read_text()
 )
@@ -564,6 +572,12 @@ null_terminatorcount_without_zombiecount_payload = json.loads(
 )
 both_null_count_aliases_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-both-null-count-aliases.json").read_text()
+)
+null_zombiecount_with_out_of_range_terminatorcount_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-null-zombiecount-with-out-of-range-terminatorcount.json").read_text()
+)
+null_terminatorcount_with_out_of_range_zombiecount_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-null-terminatorcount-with-out-of-range-zombiecount.json").read_text()
 )
 
 assert null_zombiecount_with_valid_terminatorcount_status == 400, (
@@ -620,6 +634,28 @@ assert both_null_count_aliases_payload["ok"] is False, (
 assert both_null_count_aliases_payload["error"]["code"] == "INVALID_FIELD", (
     "both null count aliases join code mismatch: "
     f"{both_null_count_aliases_payload['error']['code']}"
+)
+assert null_zombiecount_with_out_of_range_terminatorcount_status == 400, (
+    "null zombieCount with out-of-range terminatorCount join should be 400, "
+    f"got {null_zombiecount_with_out_of_range_terminatorcount_status}"
+)
+assert null_zombiecount_with_out_of_range_terminatorcount_payload["ok"] is False, (
+    "null zombieCount with out-of-range terminatorCount join payload should fail"
+)
+assert null_zombiecount_with_out_of_range_terminatorcount_payload["error"]["code"] == "INVALID_FIELD", (
+    "null zombieCount with out-of-range terminatorCount join code mismatch: "
+    f"{null_zombiecount_with_out_of_range_terminatorcount_payload['error']['code']}"
+)
+assert null_terminatorcount_with_out_of_range_zombiecount_status == 400, (
+    "null terminatorCount with out-of-range zombieCount join should be 400, "
+    f"got {null_terminatorcount_with_out_of_range_zombiecount_status}"
+)
+assert null_terminatorcount_with_out_of_range_zombiecount_payload["ok"] is False, (
+    "null terminatorCount with out-of-range zombieCount join payload should fail"
+)
+assert null_terminatorcount_with_out_of_range_zombiecount_payload["error"]["code"] == "INVALID_FIELD", (
+    "null terminatorCount with out-of-range zombieCount join code mismatch: "
+    f"{null_terminatorcount_with_out_of_range_zombiecount_payload['error']['code']}"
 )
 PY
 
