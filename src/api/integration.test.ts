@@ -1461,6 +1461,26 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("matching out-of-range zombieCount and terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingOutOfRangeCountAliasesJoin",
+        zombieCount: 33,
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("non-number terminatorCount is rejected with INVALID_FIELD", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -5148,6 +5168,31 @@ describe("RPC API integration (fallback mode)", () => {
         playerId: leaderPlayerId,
         zombieCount: 33,
         terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching out-of-range zombieCount and terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingOutOfRangeCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+        terminatorCount: 33,
       }),
     });
     const startPayload = await startResponse.json();

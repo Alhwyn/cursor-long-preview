@@ -58,6 +58,7 @@ Count field validation errors:
 - Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
 - When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+- Matching dual-field numeric-invalid requests (for example `zombieCount: 33` with `terminatorCount: 33`) also return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.
 - legacy `zombieCount` accepts `1` and `32`.
@@ -530,6 +531,7 @@ Count field validation errors:
 - Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
 - When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+- Matching dual-field numeric-invalid requests (for example `zombieCount: 33` with `terminatorCount: 33`) also return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.
 - legacy `zombieCount` accepts `1` and `32`.

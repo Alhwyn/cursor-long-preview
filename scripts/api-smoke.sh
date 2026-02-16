@@ -112,6 +112,9 @@ out_of_range_terminatorcount_with_valid_zombiecount_status="$(curl -sS -o /tmp/r
 out_of_range_zombiecount_with_valid_terminatorcount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-zombiecount-with-valid-terminatorcount-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"OutOfRangeZombieCountWithValidTerminatorCountSmoke","zombieCount":33,"terminatorCount":4}')"
+matching_out_of_range_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matching-out-of-range-count-aliases-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"MatchingOutOfRangeCountAliasesSmoke","zombieCount":33,"terminatorCount":33}')"
 string_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-string-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"StringTerminatorCountSmoke","terminatorCount":"4"}')"
@@ -800,6 +803,29 @@ assert null_terminatorcount_with_invalid_zombiecount_type_payload["ok"] is False
 assert null_terminatorcount_with_invalid_zombiecount_type_payload["error"]["code"] == "INVALID_FIELD", (
     "null terminatorCount with invalid zombieCount type join code mismatch: "
     f"{null_terminatorcount_with_invalid_zombiecount_type_payload['error']['code']}"
+)
+PY
+
+python3 - <<'PY' "${matching_out_of_range_count_aliases_status}"
+import json
+import pathlib
+import sys
+
+matching_out_of_range_count_aliases_status = int(sys.argv[1])
+matching_out_of_range_count_aliases_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-matching-out-of-range-count-aliases-join.json").read_text()
+)
+
+assert matching_out_of_range_count_aliases_status == 400, (
+    "matching out-of-range zombieCount and terminatorCount join should be 400, "
+    f"got {matching_out_of_range_count_aliases_status}"
+)
+assert matching_out_of_range_count_aliases_payload["ok"] is False, (
+    "matching out-of-range count aliases join payload should fail"
+)
+assert matching_out_of_range_count_aliases_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "matching out-of-range count aliases join code mismatch: "
+    f"{matching_out_of_range_count_aliases_payload['error']['code']}"
 )
 PY
 
