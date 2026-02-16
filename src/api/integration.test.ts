@@ -869,6 +869,26 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("out-of-range zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "OutOfRangeZombieCountWithValidTerminatorCount",
+        zombieCount: 33,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("out-of-range terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3873,6 +3893,31 @@ describe("RPC API integration (fallback mode)", () => {
         playerId: leaderPlayerId,
         zombieCount: 2,
         terminatorCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects out-of-range zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasOutOfRangeZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+        terminatorCount: 2,
       }),
     });
     const startPayload = await startResponse.json();
