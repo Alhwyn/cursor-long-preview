@@ -338,6 +338,16 @@ describe("engine", () => {
     expect(next.zombies["z-1"]?.hp).toBe(44);
   });
 
+  test("shoot with explicit targetId rotates facing toward target", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "z-1" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("right");
+  });
+
   test("shoot miss still consumes cooldown", () => {
     const state = makeState();
     state.players["p-1"]!.facing = "left";
