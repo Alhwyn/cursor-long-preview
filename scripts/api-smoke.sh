@@ -22,6 +22,12 @@ boundary_mismatched_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-bound
 matching_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matching-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"MatchingCountsSmoke","zombieCount":3,"terminatorCount":3}')"
+boundary_min_matching_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-boundary-min-matching-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"BoundaryMinMatchingCountsSmoke","zombieCount":1,"terminatorCount":1}')"
+boundary_max_matching_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-boundary-max-matching-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"BoundaryMaxMatchingCountsSmoke","zombieCount":32,"terminatorCount":32}')"
 invalid_zombiecount_with_valid_terminatorcount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-zombiecount-with-valid-terminatorcount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"InvalidZombieCountWithValidTerminatorCountSmoke","zombieCount":"4","terminatorCount":4}')"
@@ -219,7 +225,7 @@ duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-on
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${terminator_count_join_status}" "${legacy_zombie_count_join_status}" "${mismatched_count_join_status}" "${boundary_mismatched_count_join_status}" "${matching_count_join_status}" "${invalid_zombiecount_with_valid_terminatorcount_status}" "${invalid_terminatorcount_with_valid_zombiecount_status}" "${fractional_terminator_count_join_status}" "${fractional_terminatorcount_with_valid_zombiecount_status}" "${fractional_zombiecount_with_valid_terminatorcount_status}" "${low_terminatorcount_with_valid_zombiecount_status}" "${low_zombiecount_with_valid_terminatorcount_status}" "${negative_terminatorcount_with_valid_zombiecount_status}" "${negative_zombiecount_with_valid_terminatorcount_status}" "${out_of_range_terminator_count_join_status}" "${out_of_range_terminatorcount_with_valid_zombiecount_status}" "${out_of_range_zombiecount_with_valid_terminatorcount_status}" "${string_terminator_count_join_status}"
+python3 - <<'PY' "${terminator_count_join_status}" "${legacy_zombie_count_join_status}" "${mismatched_count_join_status}" "${boundary_mismatched_count_join_status}" "${matching_count_join_status}" "${boundary_min_matching_count_join_status}" "${boundary_max_matching_count_join_status}" "${invalid_zombiecount_with_valid_terminatorcount_status}" "${invalid_terminatorcount_with_valid_zombiecount_status}" "${fractional_terminator_count_join_status}" "${fractional_terminatorcount_with_valid_zombiecount_status}" "${fractional_zombiecount_with_valid_terminatorcount_status}" "${low_terminatorcount_with_valid_zombiecount_status}" "${low_zombiecount_with_valid_terminatorcount_status}" "${negative_terminatorcount_with_valid_zombiecount_status}" "${negative_zombiecount_with_valid_terminatorcount_status}" "${out_of_range_terminator_count_join_status}" "${out_of_range_terminatorcount_with_valid_zombiecount_status}" "${out_of_range_zombiecount_with_valid_terminatorcount_status}" "${string_terminator_count_join_status}"
 import json
 import pathlib
 import sys
@@ -229,19 +235,21 @@ legacy_zombie_count_join_status = int(sys.argv[2])
 mismatched_count_join_status = int(sys.argv[3])
 boundary_mismatched_count_join_status = int(sys.argv[4])
 matching_count_join_status = int(sys.argv[5])
-invalid_zombiecount_with_valid_terminatorcount_status = int(sys.argv[6])
-invalid_terminatorcount_with_valid_zombiecount_status = int(sys.argv[7])
-fractional_terminator_count_join_status = int(sys.argv[8])
-fractional_terminatorcount_with_valid_zombiecount_status = int(sys.argv[9])
-fractional_zombiecount_with_valid_terminatorcount_status = int(sys.argv[10])
-low_terminatorcount_with_valid_zombiecount_status = int(sys.argv[11])
-low_zombiecount_with_valid_terminatorcount_status = int(sys.argv[12])
-negative_terminatorcount_with_valid_zombiecount_status = int(sys.argv[13])
-negative_zombiecount_with_valid_terminatorcount_status = int(sys.argv[14])
-out_of_range_terminator_count_join_status = int(sys.argv[15])
-out_of_range_terminatorcount_with_valid_zombiecount_status = int(sys.argv[16])
-out_of_range_zombiecount_with_valid_terminatorcount_status = int(sys.argv[17])
-string_terminator_count_join_status = int(sys.argv[18])
+boundary_min_matching_count_join_status = int(sys.argv[6])
+boundary_max_matching_count_join_status = int(sys.argv[7])
+invalid_zombiecount_with_valid_terminatorcount_status = int(sys.argv[8])
+invalid_terminatorcount_with_valid_zombiecount_status = int(sys.argv[9])
+fractional_terminator_count_join_status = int(sys.argv[10])
+fractional_terminatorcount_with_valid_zombiecount_status = int(sys.argv[11])
+fractional_zombiecount_with_valid_terminatorcount_status = int(sys.argv[12])
+low_terminatorcount_with_valid_zombiecount_status = int(sys.argv[13])
+low_zombiecount_with_valid_terminatorcount_status = int(sys.argv[14])
+negative_terminatorcount_with_valid_zombiecount_status = int(sys.argv[15])
+negative_zombiecount_with_valid_terminatorcount_status = int(sys.argv[16])
+out_of_range_terminator_count_join_status = int(sys.argv[17])
+out_of_range_terminatorcount_with_valid_zombiecount_status = int(sys.argv[18])
+out_of_range_zombiecount_with_valid_terminatorcount_status = int(sys.argv[19])
+string_terminator_count_join_status = int(sys.argv[20])
 terminator_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-terminator-count-join.json").read_text())
 legacy_zombie_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-legacy-zombie-count-join.json").read_text())
 mismatched_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-mismatched-count-join.json").read_text())
@@ -249,6 +257,12 @@ boundary_mismatched_count_join_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-boundary-mismatched-count-join.json").read_text()
 )
 matching_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-matching-count-join.json").read_text())
+boundary_min_matching_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-boundary-min-matching-count-join.json").read_text()
+)
+boundary_max_matching_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-boundary-max-matching-count-join.json").read_text()
+)
 invalid_zombiecount_with_valid_terminatorcount_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-invalid-zombiecount-with-valid-terminatorcount.json").read_text()
 )
@@ -328,6 +342,26 @@ assert matching_count_join_status == 201, (
 assert matching_count_join_payload["ok"] is True, "matching count join payload should be success"
 assert len(matching_count_join_payload["data"]["state"]["zombies"]) == 3, (
     "matching count join should initialize exactly 3 terminators"
+)
+assert boundary_min_matching_count_join_status == 201, (
+    "boundary min matching zombieCount/terminatorCount join should be 201, "
+    f"got {boundary_min_matching_count_join_status}"
+)
+assert boundary_min_matching_count_join_payload["ok"] is True, (
+    "boundary min matching count join payload should be success"
+)
+assert len(boundary_min_matching_count_join_payload["data"]["state"]["zombies"]) == 1, (
+    "boundary min matching count join should initialize exactly 1 terminator"
+)
+assert boundary_max_matching_count_join_status == 201, (
+    "boundary max matching zombieCount/terminatorCount join should be 201, "
+    f"got {boundary_max_matching_count_join_status}"
+)
+assert boundary_max_matching_count_join_payload["ok"] is True, (
+    "boundary max matching count join payload should be success"
+)
+assert len(boundary_max_matching_count_join_payload["data"]["state"]["zombies"]) == 32, (
+    "boundary max matching count join should initialize exactly 32 terminators"
 )
 assert invalid_zombiecount_with_valid_terminatorcount_status == 400, (
     "invalid zombieCount with valid terminatorCount join should be 400, "

@@ -81,6 +81,18 @@ terminator_alias_player_id="$(python3 -c 'import json,sys; print(json.load(sys.s
 terminator_alias_ready_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-terminator-alias-ready.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${terminator_alias_party_id}\",\"playerId\":\"${terminator_alias_player_id}\",\"ready\":true}")"
 terminator_alias_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-terminator-alias-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${terminator_alias_party_id}\",\"playerId\":\"${terminator_alias_player_id}\",\"terminatorCount\":32,\"agentEnabled\":false}")"
 
+dual_boundary_min_create_payload="$(curl -sS -X POST "${BASE_URL}/api/party/create" -H "Content-Type: application/json" -d '{"playerName":"DualBoundaryMinLeader"}')"
+dual_boundary_min_party_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["party"]["partyId"])' <<< "${dual_boundary_min_create_payload}")"
+dual_boundary_min_player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["player"]["playerId"])' <<< "${dual_boundary_min_create_payload}")"
+dual_boundary_min_ready_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-dual-boundary-min-ready.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${dual_boundary_min_party_id}\",\"playerId\":\"${dual_boundary_min_player_id}\",\"ready\":true}")"
+dual_boundary_min_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-dual-boundary-min-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${dual_boundary_min_party_id}\",\"playerId\":\"${dual_boundary_min_player_id}\",\"zombieCount\":1,\"terminatorCount\":1,\"agentEnabled\":false}")"
+
+dual_boundary_max_create_payload="$(curl -sS -X POST "${BASE_URL}/api/party/create" -H "Content-Type: application/json" -d '{"playerName":"DualBoundaryMaxLeader"}')"
+dual_boundary_max_party_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["party"]["partyId"])' <<< "${dual_boundary_max_create_payload}")"
+dual_boundary_max_player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["player"]["playerId"])' <<< "${dual_boundary_max_create_payload}")"
+dual_boundary_max_ready_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-dual-boundary-max-ready.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${dual_boundary_max_party_id}\",\"playerId\":\"${dual_boundary_max_player_id}\",\"ready\":true}")"
+dual_boundary_max_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-dual-boundary-max-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${dual_boundary_max_party_id}\",\"playerId\":\"${dual_boundary_max_player_id}\",\"zombieCount\":32,\"terminatorCount\":32,\"agentEnabled\":false}")"
+
 python3 - <<'PY' \
   "${legacy_alias_create_payload}" "${legacy_alias_ready_status}" "${legacy_alias_start_status}" \
   "${terminator_alias_create_payload}" "${terminator_alias_ready_status}" "${terminator_alias_start_status}"
@@ -116,6 +128,48 @@ assert terminator_alias_start_status == 200, (
 assert terminator_alias_start_payload["ok"] is True, "terminator alias start payload should succeed"
 assert len(terminator_alias_start_payload["data"]["state"]["zombies"]) == 32, (
     "terminator alias start should initialize thirty-two terminators"
+)
+PY
+
+python3 - <<'PY' \
+  "${dual_boundary_min_create_payload}" "${dual_boundary_min_ready_status}" "${dual_boundary_min_start_status}" \
+  "${dual_boundary_max_create_payload}" "${dual_boundary_max_ready_status}" "${dual_boundary_max_start_status}"
+import json
+import pathlib
+import sys
+
+dual_boundary_min_create_payload = json.loads(sys.argv[1])
+dual_boundary_min_ready_status = int(sys.argv[2])
+dual_boundary_min_start_status = int(sys.argv[3])
+dual_boundary_max_create_payload = json.loads(sys.argv[4])
+dual_boundary_max_ready_status = int(sys.argv[5])
+dual_boundary_max_start_status = int(sys.argv[6])
+
+dual_boundary_min_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-dual-boundary-min-start.json").read_text())
+dual_boundary_max_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-dual-boundary-max-start.json").read_text())
+
+assert dual_boundary_min_create_payload["ok"] is True, "dual boundary min party create should succeed"
+assert dual_boundary_min_ready_status == 200, (
+    f"dual boundary min ready should be 200, got {dual_boundary_min_ready_status}"
+)
+assert dual_boundary_min_start_status == 200, (
+    f"dual boundary min start should be 200, got {dual_boundary_min_start_status}"
+)
+assert dual_boundary_min_start_payload["ok"] is True, "dual boundary min start payload should succeed"
+assert len(dual_boundary_min_start_payload["data"]["state"]["zombies"]) == 1, (
+    "dual boundary min start should initialize one terminator"
+)
+
+assert dual_boundary_max_create_payload["ok"] is True, "dual boundary max party create should succeed"
+assert dual_boundary_max_ready_status == 200, (
+    f"dual boundary max ready should be 200, got {dual_boundary_max_ready_status}"
+)
+assert dual_boundary_max_start_status == 200, (
+    f"dual boundary max start should be 200, got {dual_boundary_max_start_status}"
+)
+assert dual_boundary_max_start_payload["ok"] is True, "dual boundary max start payload should succeed"
+assert len(dual_boundary_max_start_payload["data"]["state"]["zombies"]) == 32, (
+    "dual boundary max start should initialize thirty-two terminators"
 )
 PY
 
