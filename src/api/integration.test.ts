@@ -3600,6 +3600,28 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.data.state.companion).toBeUndefined();
   });
 
+  test("party start accepts legacy zombieCount alias", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasLegacyLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        agentEnabled: false,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(Object.keys(startPayload.data.state.zombies).length).toBe(2);
+  });
+
   test("party start accepts matching zombieCount and terminatorCount", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
