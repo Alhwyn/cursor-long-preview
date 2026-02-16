@@ -1729,6 +1729,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
   });
 
+  test("shoot targetId trims mixed whitespace before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimWhitespaceShootTarget" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "\n\tz-missing\t\n" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(404);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
   test("shoot targetId is trimmed before range validation", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -2024,6 +2051,33 @@ describe("RPC API integration (fallback mode)", () => {
         session: joinPayload.data.sessionId,
         playerId: joinPayload.data.playerId,
         action: { type: "attack", targetId: "  z-missing  " },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("attack unknown explicit target trims mixed whitespace before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimWhitespaceMissingTargetAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "\n\tz-missing\t\n" },
       }),
     });
     const attackPayload = await attackResponse.json();

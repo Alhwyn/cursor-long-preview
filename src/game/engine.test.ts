@@ -75,6 +75,16 @@ describe("engine", () => {
     expect(afterAttack.players["p-1"]?.facing).toBe("right");
   });
 
+  test("attack trims mixed-whitespace explicit target id before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "\n\tz-1\t\n" });
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
+    expect(afterAttack.players["p-1"]?.facing).toBe("right");
+  });
+
   test("attack cooldown is enforced before explicit target validation", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
@@ -408,6 +418,16 @@ describe("engine", () => {
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
 
     const next = applyAction(state, "p-1", { type: "shoot", targetId: "  z-1  " });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("shoot trims mixed-whitespace explicit targetId before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "\n\tz-1\t\n" });
     expect(next.zombies["z-1"]?.hp).toBe(44);
     expect(next.players["p-1"]?.facing).toBe("right");
   });

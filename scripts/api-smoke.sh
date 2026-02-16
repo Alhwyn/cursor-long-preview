@@ -20,12 +20,18 @@ unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-unknown-target
 trimmed_unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-trimmed-unknown-target-attack.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"  z-missing  \"}}")"
+mixed_whitespace_unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-mixed-whitespace-unknown-target-attack.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
+  -H "Content-Type: application/json" \
+  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"\n\tz-missing\t\n\"}}")"
 unknown_target_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-unknown-target-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"targetId\":\"z-missing\"}}")"
 trimmed_unknown_target_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-trimmed-unknown-target-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"targetId\":\"  z-missing  \"}}")"
+mixed_whitespace_unknown_target_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-mixed-whitespace-unknown-target-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
+  -H "Content-Type: application/json" \
+  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"targetId\":\"\n\tz-missing\t\n\"}}")"
 target_precedence_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-target-precedence-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"targetId\":\"z-1\",\"direction\":\"up\"}}")"
@@ -158,6 +164,45 @@ duplicate_server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["
 duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-one.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeA"}')"
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
+
+python3 - <<'PY' "${mixed_whitespace_unknown_target_attack_status}" "${mixed_whitespace_unknown_target_shoot_status}"
+import json
+import pathlib
+import sys
+
+mixed_whitespace_unknown_target_attack_status = int(sys.argv[1])
+mixed_whitespace_unknown_target_shoot_status = int(sys.argv[2])
+mixed_whitespace_unknown_target_attack_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-mixed-whitespace-unknown-target-attack.json").read_text()
+)
+mixed_whitespace_unknown_target_shoot_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-mixed-whitespace-unknown-target-shoot.json").read_text()
+)
+
+assert mixed_whitespace_unknown_target_attack_status == 404, (
+    "mixed-whitespace unknown target attack should be 404, "
+    f"got {mixed_whitespace_unknown_target_attack_status}"
+)
+assert mixed_whitespace_unknown_target_attack_payload["ok"] is False, (
+    "mixed-whitespace unknown target attack payload should be failure"
+)
+assert mixed_whitespace_unknown_target_attack_payload["error"]["code"] == "TARGET_NOT_FOUND", (
+    "mixed-whitespace unknown target attack code mismatch: "
+    f"{mixed_whitespace_unknown_target_attack_payload['error']['code']}"
+)
+
+assert mixed_whitespace_unknown_target_shoot_status == 404, (
+    "mixed-whitespace unknown target shoot should be 404, "
+    f"got {mixed_whitespace_unknown_target_shoot_status}"
+)
+assert mixed_whitespace_unknown_target_shoot_payload["ok"] is False, (
+    "mixed-whitespace unknown target shoot payload should be failure"
+)
+assert mixed_whitespace_unknown_target_shoot_payload["error"]["code"] == "TARGET_NOT_FOUND", (
+    "mixed-whitespace unknown target shoot code mismatch: "
+    f"{mixed_whitespace_unknown_target_shoot_payload['error']['code']}"
+)
+PY
 
 python3 - <<'PY' "${cooldown_trimmed_unknown_target_attack_status}"
 import json
