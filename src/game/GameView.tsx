@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import RaycastShooterCanvas from "./RaycastShooterCanvas";
 import type { Action, GameState, Observation, PartyState } from "./types";
 import HudPanel from "./components/HudPanel";
+import ObservationPanel from "./components/ObservationPanel";
+import PartyLobbyPanel from "./components/PartyLobbyPanel";
+import ServerBrowserPanel from "./components/ServerBrowserPanel";
 import ShooterControls from "./components/ShooterControls";
+import SystemFeedPanel from "./components/SystemFeedPanel";
 
 interface ApiError {
   code: string;
@@ -661,181 +665,57 @@ export function GameView() {
         </section>
 
         <section className="space-y-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Party Lobby (4 players)</h2>
-            <div className="grid gap-2">
-              <input
-                value={playerName}
-                onChange={event => setPlayerName(event.target.value)}
-                className="rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-                placeholder="Display name"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void createPartyLobby()}
-                  className="rounded bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 px-3 py-2 font-medium"
-                >
-                  Create Party
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void joinPartyLobby()}
-                  className="rounded bg-cyan-500 hover:bg-cyan-400 disabled:opacity-60 text-slate-950 px-3 py-2 font-medium"
-                >
-                  Join by Code
-                </button>
-              </div>
-              <input
-                value={partyCodeInput}
-                onChange={event => setPartyCodeInput(event.target.value.toUpperCase())}
-                className="rounded-md bg-slate-950 border border-slate-700 px-3 py-2 tracking-[0.25em] uppercase"
-                placeholder="PARTY CODE"
-                maxLength={8}
-              />
-            </div>
-
-            <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Realtime</div>
-              <div
-                className={`text-sm font-medium ${
-                  realtimeStatus === "live"
-                    ? "text-emerald-300"
-                    : realtimeStatus === "connecting"
-                      ? "text-amber-300"
-                      : realtimeStatus === "degraded"
-                        ? "text-rose-300"
-                        : "text-slate-400"
-                }`}
-              >
-                {realtimeStatus}
-              </div>
-              <div className="text-xs text-slate-500">Status auto-updates for party and match events.</div>
-            </div>
-
-            {party ? (
-              <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
-                <div className="text-xs uppercase tracking-wide text-slate-400">Party</div>
-                <div className="text-sm">Code: <span className="font-semibold tracking-[0.2em]">{party.partyCode}</span></div>
-                <div className="text-sm">
-                  Members: {party.members.length}/{party.maxPlayers} | Ready: {party.readyCount}/{party.members.length}
-                </div>
-                <div className="space-y-1">
-                  {party.members.map(member => (
-                    <div key={member.playerId} className="flex items-center justify-between text-sm">
-                      <span className="truncate">
-                        {member.playerName}
-                        {member.playerId === party.leaderPlayerId ? " (Leader)" : ""}
-                        {member.playerId === playerId ? " (You)" : ""}
-                      </span>
-                      <span className={member.ready ? "text-emerald-300" : "text-amber-300"}>{member.ready ? "Ready" : "Not Ready"}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={busy || !selfPartyMember || party.status !== "open"}
-                    onClick={() => void togglePartyReady()}
-                    className="rounded bg-violet-500 hover:bg-violet-400 disabled:opacity-60 px-3 py-1 text-sm font-medium text-slate-950"
-                  >
-                    {selfPartyMember?.ready ? "Unready" : "Ready Up"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !canStartParty}
-                    onClick={() => void startPartyMatch()}
-                    className="rounded bg-amber-400 hover:bg-amber-300 disabled:opacity-60 px-3 py-1 text-sm font-medium text-slate-950"
-                  >
-                    Start Match
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void leavePartyLobby()}
-                    className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-60 px-3 py-1 text-sm"
-                  >
-                    Leave Party
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <PartyLobbyPanel
+            busy={busy}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            partyCodeInput={partyCodeInput}
+            onPartyCodeInputChange={setPartyCodeInput}
+            party={party}
+            playerId={playerId}
+            realtimeStatus={realtimeStatus}
+            selfReady={selfPartyMember?.ready}
+            canStartParty={canStartParty}
+            onCreateParty={() => {
+              void createPartyLobby();
+            }}
+            onJoinParty={() => {
+              void joinPartyLobby();
+            }}
+            onToggleReady={() => {
+              void togglePartyReady();
+            }}
+            onStartParty={() => {
+              void startPartyMatch();
+            }}
+            onLeaveParty={() => {
+              void leavePartyLobby();
+            }}
+          />
 
           <HudPanel state={state} self={self} aliveTerminators={aliveTerminators} partyMemberCount={party?.members.length} />
 
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
-            <h2 className="font-semibold text-lg">Servers ({supabaseMode})</h2>
-            <label className="text-sm text-slate-300 block">
-              Supabase Bearer Token (optional, required in enabled mode for create)
-              <input
-                value={authToken}
-                onChange={event => setAuthToken(event.target.value)}
-                className="mt-1 w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-              />
-            </label>
-            <div className="grid gap-2">
-              <input
-                value={serverName}
-                onChange={event => setServerName(event.target.value)}
-                className="rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
-                placeholder="Server name"
-              />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => void createLobby()} className="rounded bg-amber-400 text-slate-950 px-3 py-2 font-medium">
-                  Create Server
-                </button>
-                <button type="button" onClick={() => void loadServers()} className="rounded bg-slate-700 hover:bg-slate-600 px-3 py-2">
-                  Refresh List
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {servers.length === 0 ? (
-                <div className="text-sm text-slate-400">No servers yet.</div>
-              ) : (
-                servers.map(server => (
-                  <div key={server.id} className="border border-slate-700 rounded-lg p-2">
-                    <div className="font-medium">{server.name}</div>
-                    <div className="text-xs text-slate-400 break-all">ID: {server.id}</div>
-                    <div className="text-xs text-slate-400">
-                      Players: {server.currentPlayers}/{server.maxPlayers}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void joinServer(server.id)}
-                      className="mt-2 rounded bg-cyan-500 text-slate-950 px-3 py-1 text-sm font-medium"
-                    >
-                      Join Server
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <ServerBrowserPanel
+            supabaseMode={supabaseMode}
+            authToken={authToken}
+            onAuthTokenChange={setAuthToken}
+            serverName={serverName}
+            onServerNameChange={setServerName}
+            servers={servers}
+            onCreateServer={() => {
+              void createLobby();
+            }}
+            onRefreshServers={() => {
+              void loadServers();
+            }}
+            onJoinServer={serverId => {
+              void joinServer(serverId);
+            }}
+          />
 
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <h2 className="font-semibold text-lg mb-2">Observation</h2>
-            <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs overflow-auto max-h-[320px]">
-              {observation ? JSON.stringify(observation, null, 2) : "No observation yet."}
-            </pre>
-          </div>
+          <ObservationPanel observation={observation} />
 
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <h2 className="font-semibold text-lg mb-2">System Feed</h2>
-            <div className="space-y-1 max-h-[160px] overflow-auto pr-1 text-xs">
-              {systemFeed.length === 0 ? <div className="text-slate-500">No events yet.</div> : null}
-              {systemFeed.map((message, index) => (
-                <div key={`${message}-${index}`} className="text-slate-300">
-                  • {message}
-                </div>
-              ))}
-            </div>
-            <h3 className="font-semibold text-sm mt-3 mb-1">Errors</h3>
-            <div className={`text-sm ${error ? "text-rose-300" : "text-slate-500"}`}>{error || "No errors."}</div>
-          </div>
+          <SystemFeedPanel systemFeed={systemFeed} error={error} />
         </section>
       </div>
     </div>
