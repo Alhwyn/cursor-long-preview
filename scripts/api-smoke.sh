@@ -90,13 +90,16 @@ invalid_server_join_field_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-se
 blank_server_join_player_id_status="$(curl -sS -o /tmp/rpc-zombie-smoke-blank-server-join-player-id.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"   ","playerName":"BlankServerJoinId"}')"
 invalid_server_description_type_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-description-type.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerDescriptionType","description":123}')"
 invalid_server_maxplayers_type_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-maxplayers-type.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerMaxPlayersType","maxPlayers":"4"}')"
+invalid_server_maxplayers_low_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-maxplayers-low.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerMaxPlayersLow","maxPlayers":0}')"
+invalid_server_maxplayers_high_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-maxplayers-high.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerMaxPlayersHigh","maxPlayers":33}')"
+invalid_server_maxplayers_fractional_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-server-maxplayers-fractional.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"InvalidServerMaxPlayersFractional","maxPlayers":2.5}')"
 duplicate_server_payload="$(curl -sS -X POST "${BASE_URL}/api/servers" -H "Content-Type: application/json" -d '{"name":"Duplicate Smoke Lobby","maxPlayers":3}')"
 duplicate_server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["server"]["id"])' <<< "${duplicate_server_payload}")"
 duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-one.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeA"}')"
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}"
+python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}" "${invalid_server_maxplayers_low_status}" "${invalid_server_maxplayers_high_status}" "${invalid_server_maxplayers_fractional_status}"
 import json
 import pathlib
 import sys
@@ -141,6 +144,9 @@ duplicate_join_one_status = int(sys.argv[37])
 duplicate_join_two_status = int(sys.argv[38])
 out_of_range_zombie_count_status = int(sys.argv[39])
 string_zombie_count_status = int(sys.argv[40])
+invalid_server_maxplayers_low_status = int(sys.argv[41])
+invalid_server_maxplayers_high_status = int(sys.argv[42])
+invalid_server_maxplayers_fractional_status = int(sys.argv[43])
 missing_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-server.json").read_text())
 join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-join-server.json").read_text())
 missing_join_server_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-join-server.json").read_text())
@@ -165,6 +171,15 @@ invalid_server_description_type_payload = json.loads(
 )
 invalid_server_maxplayers_type_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-maxplayers-type.json").read_text()
+)
+invalid_server_maxplayers_low_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-maxplayers-low.json").read_text()
+)
+invalid_server_maxplayers_high_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-maxplayers-high.json").read_text()
+)
+invalid_server_maxplayers_fractional_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-server-maxplayers-fractional.json").read_text()
 )
 duplicate_join_one_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-one.json").read_text())
 duplicate_join_two_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-two.json").read_text())
@@ -223,6 +238,15 @@ assert invalid_server_description_type_status == 400, (
 )
 assert invalid_server_maxplayers_type_status == 400, (
     f"server create with invalid maxPlayers type should be 400, got {invalid_server_maxplayers_type_status}"
+)
+assert invalid_server_maxplayers_low_status == 400, (
+    f"server create with low maxPlayers should be 400, got {invalid_server_maxplayers_low_status}"
+)
+assert invalid_server_maxplayers_high_status == 400, (
+    f"server create with high maxPlayers should be 400, got {invalid_server_maxplayers_high_status}"
+)
+assert invalid_server_maxplayers_fractional_status == 400, (
+    f"server create with fractional maxPlayers should be 400, got {invalid_server_maxplayers_fractional_status}"
 )
 assert duplicate_join_one_status == 200, f"duplicate join first attempt should be 200, got {duplicate_join_one_status}"
 assert duplicate_join_two_status == 409, f"duplicate join second attempt should be 409, got {duplicate_join_two_status}"
@@ -313,6 +337,20 @@ assert invalid_server_description_type_payload["error"]["code"] == "INVALID_FIEL
 assert invalid_server_maxplayers_type_payload["ok"] is False, "invalid server maxPlayers-type payload should be failure"
 assert invalid_server_maxplayers_type_payload["error"]["code"] == "INVALID_FIELD", (
     f"invalid server maxPlayers-type code mismatch: {invalid_server_maxplayers_type_payload['error']['code']}"
+)
+assert invalid_server_maxplayers_low_payload["ok"] is False, "invalid server maxPlayers low payload should be failure"
+assert invalid_server_maxplayers_low_payload["error"]["code"] == "INVALID_MAX_PLAYERS", (
+    f"invalid server maxPlayers low code mismatch: {invalid_server_maxplayers_low_payload['error']['code']}"
+)
+assert invalid_server_maxplayers_high_payload["ok"] is False, "invalid server maxPlayers high payload should be failure"
+assert invalid_server_maxplayers_high_payload["error"]["code"] == "INVALID_MAX_PLAYERS", (
+    f"invalid server maxPlayers high code mismatch: {invalid_server_maxplayers_high_payload['error']['code']}"
+)
+assert invalid_server_maxplayers_fractional_payload["ok"] is False, (
+    "invalid server maxPlayers fractional payload should be failure"
+)
+assert invalid_server_maxplayers_fractional_payload["error"]["code"] == "INVALID_MAX_PLAYERS", (
+    f"invalid server maxPlayers fractional code mismatch: {invalid_server_maxplayers_fractional_payload['error']['code']}"
 )
 assert duplicate_join_one_payload["ok"] is True, "first duplicate-join payload should be success"
 assert duplicate_join_two_payload["ok"] is False, "second duplicate-join payload should be failure"
