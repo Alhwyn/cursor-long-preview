@@ -1323,6 +1323,7 @@ export function toObservation(state: GameState, playerId: string): Observation {
     status: state.status,
     self: playerToObservationEntity(player),
     nearestZombie,
+    nearestTerminator: nearestZombie,
     scrap: state.scrap,
     players,
     zombies,

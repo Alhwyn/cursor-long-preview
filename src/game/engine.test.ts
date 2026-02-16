@@ -240,6 +240,8 @@ describe("engine", () => {
     const observation = toObservation(state, "p-1");
     expect(observation.nearestZombie?.id).toBe("z-2");
     expect(observation.nearestZombie?.distance).toBe(1);
+    expect(observation.nearestTerminator?.id).toBe("z-2");
+    expect(observation.nearestTerminator?.distance).toBe(1);
   });
 
   test("observation tie-breaks nearest zombie by id and keeps entities sorted", () => {
@@ -254,10 +256,21 @@ describe("engine", () => {
     const observation = toObservation(state, "p-1");
     expect(observation.nearestZombie?.distance).toBe(1);
     expect(observation.nearestZombie?.id).toBe("a-zombie");
+    expect(observation.nearestTerminator?.id).toBe("a-zombie");
 
     const entityIds = observation.entities.map(entity => entity.id);
     const sortedEntityIds = [...entityIds].sort((left, right) => left.localeCompare(right));
     expect(entityIds).toEqual(sortedEntityIds);
+  });
+
+  test("observation nearestTerminator alias is null when no living terminators remain", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    const observation = toObservation(state, "p-1");
+    expect(observation.nearestZombie).toBeNull();
+    expect(observation.nearestTerminator).toBeNull();
   });
 
   test("same input state and action produces deterministic output", () => {
@@ -619,6 +632,7 @@ describe("engine", () => {
     });
     const observation = toObservation(built, "p-1");
     expect(observation.terminators).toHaveLength(observation.zombies.length);
+    expect(observation.nearestTerminator?.id).toBe(observation.nearestZombie?.id);
     expect(observation.turrets.length).toBeGreaterThanOrEqual(1);
   });
 });

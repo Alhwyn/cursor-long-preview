@@ -312,6 +312,7 @@ describe("RPC API integration (fallback mode)", () => {
     const zombieIds = actionPayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
     const terminatorIds = actionPayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
     expect(terminatorIds).toEqual(zombieIds);
+    expect(actionPayload.data.observation.nearestTerminator).toEqual(actionPayload.data.observation.nearestZombie);
   });
 
   test("join defaults player naming and deterministic ids when not provided", async () => {
@@ -1147,6 +1148,7 @@ describe("RPC API integration (fallback mode)", () => {
     const zombieIds = observePayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
     const terminatorIds = observePayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
     expect(terminatorIds).toEqual(zombieIds);
+    expect(observePayload.data.observation.nearestTerminator).toEqual(observePayload.data.observation.nearestZombie);
   });
 
   test("observe with unknown player returns 404", async () => {

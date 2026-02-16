@@ -147,6 +147,7 @@ export interface Observation {
   status: GameStatus;
   self: ObservationEntity;
   nearestZombie: NearestZombieInfo | null;
+  nearestTerminator: NearestZombieInfo | null;
   players: ObservationEntity[];
   zombies: ObservationEntity[];
   terminators: ObservationEntity[];

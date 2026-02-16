@@ -423,6 +423,9 @@ action_terminator_ids = [entity["id"] for entity in action_payload["data"]["obse
 assert action_terminator_ids == action_zombie_ids, (
     f"action observation alias mismatch: zombies={action_zombie_ids} terminators={action_terminator_ids}"
 )
+assert action_payload["data"]["observation"]["nearestTerminator"] == action_payload["data"]["observation"]["nearestZombie"], (
+    "action nearestTerminator alias mismatch with nearestZombie"
+)
 assert shoot_status == 200, f"shoot action status unexpected: {shoot_status}"
 assert shoot_payload["ok"] is True, "shoot action payload should be success"
 assert shoot_payload["data"]["state"]["players"][join_payload["data"]["playerId"]]["facing"] == "up", (
@@ -650,6 +653,9 @@ assert observe_alias_payload["ok"] is True, "observe alias payload should be suc
 zombie_ids = [entity["id"] for entity in observe_alias_payload["data"]["observation"]["zombies"]]
 terminator_ids = [entity["id"] for entity in observe_alias_payload["data"]["observation"]["terminators"]]
 assert terminator_ids == zombie_ids, f"terminator alias mismatch: zombies={zombie_ids} terminators={terminator_ids}"
+assert observe_alias_payload["data"]["observation"]["nearestTerminator"] == observe_alias_payload["data"]["observation"]["nearestZombie"], (
+    "nearestTerminator alias mismatch with nearestZombie"
+)
 assert blank_action_session_payload["ok"] is False, "blank action session payload should be failure"
 assert blank_action_session_payload["error"]["code"] == "INVALID_FIELD", f"blank action session code mismatch: {blank_action_session_payload['error']['code']}"
 assert blank_action_player_payload["ok"] is False, "blank action player payload should be failure"

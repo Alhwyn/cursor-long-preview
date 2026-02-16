@@ -200,6 +200,16 @@ Observation shape:
     "hp": 70,
     "alive": true
   },
+  "nearestTerminator": {
+    "id": "z-2",
+    "distance": 5,
+    "dx": 4,
+    "dy": 1,
+    "x": 6,
+    "y": 3,
+    "hp": 70,
+    "alive": true
+  },
   "scrap": 32,
   "terminators": [],
   "companion": {
@@ -221,6 +231,7 @@ Observation shape:
 ```
 
 `zombies` remains for backward compatibility. `terminators` is an equivalent alias for robot-themed clients.
+`nearestZombie` remains for backward compatibility. `nearestTerminator` is an equivalent alias.
 
 ---
 
