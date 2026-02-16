@@ -57,6 +57,10 @@ low_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-
 negative_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":-1}")"
 negative_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":-1,\"terminatorCount\":2}")"
 out_of_range_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-out-of-range-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":33}")"
+low_terminator_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-low-terminator-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":0}")"
+negative_terminator_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-terminator-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":-1}")"
+low_zombie_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-low-zombie-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":0}")"
+negative_zombie_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-negative-zombie-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":-1}")"
 string_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-string-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":\"4\"}")"
 invalid_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":\"2\",\"terminatorCount\":2}")"
 invalid_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":\"2\"}")"
@@ -530,6 +534,65 @@ assert matching_invalid_type_count_aliases_start_payload["ok"] is False, (
 assert matching_invalid_type_count_aliases_start_payload["error"]["code"] == "INVALID_FIELD", (
     "unexpected matching invalid-type count aliases start code: "
     f"{matching_invalid_type_count_aliases_start_payload['error']['code']}"
+)
+PY
+
+python3 - <<'PY' "${low_terminator_count_start_status}" "${negative_terminator_count_start_status}" "${low_zombie_count_start_status}" "${negative_zombie_count_start_status}"
+import json
+import pathlib
+import sys
+
+low_terminator_count_start_status = int(sys.argv[1])
+negative_terminator_count_start_status = int(sys.argv[2])
+low_zombie_count_start_status = int(sys.argv[3])
+negative_zombie_count_start_status = int(sys.argv[4])
+low_terminator_count_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-low-terminator-count-start.json").read_text()
+)
+negative_terminator_count_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-negative-terminator-count-start.json").read_text()
+)
+low_zombie_count_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-low-zombie-count-start.json").read_text()
+)
+negative_zombie_count_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-negative-zombie-count-start.json").read_text()
+)
+
+assert low_terminator_count_start_status == 400, (
+    f"party start with low terminatorCount should be 400, got {low_terminator_count_start_status}"
+)
+assert low_terminator_count_start_payload["ok"] is False, "low terminatorCount start payload should fail"
+assert low_terminator_count_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected low terminatorCount start code: "
+    f"{low_terminator_count_start_payload['error']['code']}"
+)
+assert negative_terminator_count_start_status == 400, (
+    "party start with negative terminatorCount should be 400, "
+    f"got {negative_terminator_count_start_status}"
+)
+assert negative_terminator_count_start_payload["ok"] is False, (
+    "negative terminatorCount start payload should fail"
+)
+assert negative_terminator_count_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected negative terminatorCount start code: "
+    f"{negative_terminator_count_start_payload['error']['code']}"
+)
+assert low_zombie_count_start_status == 400, (
+    f"party start with low zombieCount should be 400, got {low_zombie_count_start_status}"
+)
+assert low_zombie_count_start_payload["ok"] is False, "low zombieCount start payload should fail"
+assert low_zombie_count_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected low zombieCount start code: "
+    f"{low_zombie_count_start_payload['error']['code']}"
+)
+assert negative_zombie_count_start_status == 400, (
+    f"party start with negative zombieCount should be 400, got {negative_zombie_count_start_status}"
+)
+assert negative_zombie_count_start_payload["ok"] is False, "negative zombieCount start payload should fail"
+assert negative_zombie_count_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected negative zombieCount start code: "
+    f"{negative_zombie_count_start_payload['error']['code']}"
 )
 PY
 

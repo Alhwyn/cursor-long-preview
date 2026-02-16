@@ -60,6 +60,7 @@ Count field validation errors:
 - Matching dual-field non-numeric requests (for example `"4"/"4"`) also return `400 INVALID_FIELD`.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 - Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
+- Single-field low/negative requests (for example `terminatorCount: 0` or `zombieCount: -1`) return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.
 - legacy `zombieCount` accepts `1` and `32`.
@@ -534,6 +535,7 @@ Count field validation errors:
 - Matching dual-field non-numeric requests (for example `"2"/"2"`) also return `400 INVALID_FIELD`.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 - Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
+- Single-field low/negative requests (for example `terminatorCount: 0` or `zombieCount: -1`) return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.
 - legacy `zombieCount` accepts `1` and `32`.

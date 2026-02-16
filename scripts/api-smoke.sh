@@ -106,6 +106,18 @@ negative_zombiecount_with_valid_terminatorcount_status="$(curl -sS -o /tmp/rpc-z
 out_of_range_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"OutOfRangeTerminatorCountSmoke","terminatorCount":33}')"
+low_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-low-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"LowTerminatorCountSmoke","terminatorCount":0}')"
+negative_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-negative-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"NegativeTerminatorCountSmoke","terminatorCount":-1}')"
+low_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-low-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"LowZombieCountSmoke","zombieCount":0}')"
+negative_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-negative-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"NegativeZombieCountSmoke","zombieCount":-1}')"
 out_of_range_terminatorcount_with_valid_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-terminatorcount-with-valid-zombiecount-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"OutOfRangeTerminatorCountWithValidZombieCountSmoke","zombieCount":4,"terminatorCount":33}')"
@@ -906,6 +918,62 @@ assert matching_invalid_type_count_aliases_payload["ok"] is False, (
 assert matching_invalid_type_count_aliases_payload["error"]["code"] == "INVALID_FIELD", (
     "matching invalid-type count aliases join code mismatch: "
     f"{matching_invalid_type_count_aliases_payload['error']['code']}"
+)
+PY
+
+python3 - <<'PY' "${low_terminator_count_join_status}" "${negative_terminator_count_join_status}" "${low_zombie_count_join_status}" "${negative_zombie_count_join_status}"
+import json
+import pathlib
+import sys
+
+low_terminator_count_join_status = int(sys.argv[1])
+negative_terminator_count_join_status = int(sys.argv[2])
+low_zombie_count_join_status = int(sys.argv[3])
+negative_zombie_count_join_status = int(sys.argv[4])
+low_terminator_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-low-terminator-count-join.json").read_text()
+)
+negative_terminator_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-negative-terminator-count-join.json").read_text()
+)
+low_zombie_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-low-zombie-count-join.json").read_text()
+)
+negative_zombie_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-negative-zombie-count-join.json").read_text()
+)
+
+assert low_terminator_count_join_status == 400, (
+    f"low terminatorCount join should be 400, got {low_terminator_count_join_status}"
+)
+assert low_terminator_count_join_payload["ok"] is False, "low terminatorCount join payload should fail"
+assert low_terminator_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "low terminatorCount join code mismatch: "
+    f"{low_terminator_count_join_payload['error']['code']}"
+)
+assert negative_terminator_count_join_status == 400, (
+    f"negative terminatorCount join should be 400, got {negative_terminator_count_join_status}"
+)
+assert negative_terminator_count_join_payload["ok"] is False, "negative terminatorCount join payload should fail"
+assert negative_terminator_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "negative terminatorCount join code mismatch: "
+    f"{negative_terminator_count_join_payload['error']['code']}"
+)
+assert low_zombie_count_join_status == 400, (
+    f"low zombieCount join should be 400, got {low_zombie_count_join_status}"
+)
+assert low_zombie_count_join_payload["ok"] is False, "low zombieCount join payload should fail"
+assert low_zombie_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "low zombieCount join code mismatch: "
+    f"{low_zombie_count_join_payload['error']['code']}"
+)
+assert negative_zombie_count_join_status == 400, (
+    f"negative zombieCount join should be 400, got {negative_zombie_count_join_status}"
+)
+assert negative_zombie_count_join_payload["ok"] is False, "negative zombieCount join payload should fail"
+assert negative_zombie_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "negative zombieCount join code mismatch: "
+    f"{negative_zombie_count_join_payload['error']['code']}"
 )
 PY
 
