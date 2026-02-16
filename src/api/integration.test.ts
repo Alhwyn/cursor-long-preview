@@ -286,6 +286,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_DIRECTION");
   });
 
+  test("shoot with invalid direction is rejected with 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "BadShootDirectionUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const response = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", direction: "north" },
+      }),
+    });
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_DIRECTION");
+  });
+
   test("invalid join field types return INVALID_FIELD", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
