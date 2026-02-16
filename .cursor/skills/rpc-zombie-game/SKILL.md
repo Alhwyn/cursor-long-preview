@@ -46,7 +46,7 @@ Drive the server-authoritative simulation through API actions without direct sta
   - local fallback; create-server route is open.
 - If `mode: "enabled"`:
   - create-server requires `Authorization: Bearer <Supabase JWT>`.
-  - Missing token => `401`, invalid token => `403`.
+  - Missing token (or non-Bearer auth header) => `401`, invalid bearer token => `403`.
 
 ## Action Strategy Hint
 

@@ -88,7 +88,7 @@ curl -s -X POST http://127.0.0.1:3000/api/servers/<SERVER_ID>/join \
 - `ATTACK_COOLDOWN` -> move or wait one turn.
 - `MOVE_BLOCKED` / `MOVE_OCCUPIED` -> pick alternate direction.
 - `SERVER_FULL` -> choose another server or create a new one.
-- `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode.
+- `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode (`UNAUTHORIZED` also covers missing/non-Bearer auth headers).
 
 ## Observation-driven movement heuristic
 

@@ -242,6 +242,8 @@ Create server metadata.
 Auth rules:
 - Supabase **disabled**: no auth required.
 - Supabase **enabled**: `Authorization: Bearer <jwt>` required.
+  - Missing or non-Bearer `Authorization` header returns `401 UNAUTHORIZED`.
+  - Bearer token that fails verification returns `403 FORBIDDEN`.
 
 Request:
 

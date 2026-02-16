@@ -2077,6 +2077,25 @@ describe("RPC API integration (supabase auth gate)", () => {
     expect(payload.error.code).toBe("FORBIDDEN");
   });
 
+  test("non-bearer authorization header is treated as missing token", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Basic invalid-token",
+      },
+      body: JSON.stringify({ name: "Malformed Auth Header" }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("UNAUTHORIZED");
+  });
+
   test("servers endpoint reports enabled mode with Supabase env", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
