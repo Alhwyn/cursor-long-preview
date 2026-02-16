@@ -77,6 +77,99 @@ function secondaryDirectionTowardDelta(dx: number, dy: number, primaryDirection:
   return dx > 0 ? "right" : "left";
 }
 
+interface NearestZombieObservation {
+  id?: string;
+  distance: number;
+  dx: number;
+  dy: number;
+}
+
+async function observeNearestZombie(
+  baseUrl: string,
+  sessionId: string,
+  playerId: string,
+): Promise<NearestZombieObservation | null> {
+  const observeResponse = await fetch(
+    `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+  );
+  const observePayload = await observeResponse.json();
+  expect(observeResponse.status).toBe(200);
+  expect(observePayload.ok).toBe(true);
+
+  return (observePayload.data.observation.nearestZombie as NearestZombieObservation | undefined) ?? null;
+}
+
+interface MovePlayerIntoRangeOptions {
+  baseUrl: string;
+  sessionId: string;
+  playerId: string;
+  targetDistance: number;
+  maxSteps?: number;
+}
+
+async function movePlayerIntoRange({
+  baseUrl,
+  sessionId,
+  playerId,
+  targetDistance,
+  maxSteps = 80,
+}: MovePlayerIntoRangeOptions): Promise<boolean> {
+  for (let step = 0; step < maxSteps; step++) {
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    if (!nearestZombie) {
+      return false;
+    }
+    if (nearestZombie.distance <= targetDistance) {
+      return true;
+    }
+
+    const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
+    const secondaryDirection = secondaryDirectionTowardDelta(nearestZombie.dx, nearestZombie.dy, primaryDirection);
+
+    const tryMove = async (direction: Direction) => {
+      const response = await fetch(`${baseUrl}/api/game/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session: sessionId,
+          playerId,
+          action: { type: "move", direction },
+        }),
+      });
+      const payload = await response.json();
+      return { response, payload };
+    };
+
+    let moveAttempt = await tryMove(primaryDirection);
+    if (
+      moveAttempt.response.status === 409 &&
+      (moveAttempt.payload.error.code === "MOVE_BLOCKED" || moveAttempt.payload.error.code === "MOVE_OCCUPIED") &&
+      secondaryDirection
+    ) {
+      moveAttempt = await tryMove(secondaryDirection);
+    }
+
+    if (moveAttempt.response.status === 200) {
+      expect(moveAttempt.payload.ok).toBe(true);
+      continue;
+    }
+
+    expect(moveAttempt.response.status).toBe(409);
+    expect(moveAttempt.payload.ok).toBe(false);
+    expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(moveAttempt.payload.error.code);
+    const progressTick = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const progressPayload = await progressTick.json();
+    expect(progressTick.status).toBe(200);
+    expect(progressPayload.ok).toBe(true);
+  }
+
+  return false;
+}
+
 describe("RPC API integration (fallback mode)", () => {
   let server: RunningServer | null = null;
 
@@ -1397,54 +1490,12 @@ describe("RPC API integration (fallback mode)", () => {
     const sessionId = joinPayload.data.sessionId as string;
     const playerId = joinPayload.data.playerId as string;
 
-    let inRange = false;
-    for (let step = 0; step < 80; step++) {
-      const observeResponse = await fetch(
-        `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
-      );
-      const observePayload = await observeResponse.json();
-      expect(observeResponse.status).toBe(200);
-      expect(observePayload.ok).toBe(true);
-
-      const nearestZombie = observePayload.data.observation.nearestZombie as
-        | { distance: number; dx: number; dy: number }
-        | undefined;
-      if (!nearestZombie) {
-        break;
-      }
-      if (nearestZombie.distance <= 4) {
-        inRange = true;
-        break;
-      }
-
-      const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
-      const moveResponse = await fetch(`${baseUrl}/api/game/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session: sessionId,
-          playerId,
-          action: { type: "move", direction: primaryDirection },
-        }),
-      });
-      const movePayload = await moveResponse.json();
-      if (moveResponse.status === 200) {
-        expect(movePayload.ok).toBe(true);
-        continue;
-      }
-
-      expect(moveResponse.status).toBe(409);
-      expect(movePayload.ok).toBe(false);
-      expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(movePayload.error.code);
-      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: sessionId }),
-      });
-      const tickPayload = await tickResponse.json();
-      expect(tickResponse.status).toBe(200);
-      expect(tickPayload.ok).toBe(true);
-    }
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 4,
+    });
 
     expect(inRange).toBe(true);
     const preShootObserve = await fetch(
@@ -1632,72 +1683,12 @@ describe("RPC API integration (fallback mode)", () => {
     const sessionId = joinPayload.data.sessionId as string;
     const playerId = joinPayload.data.playerId as string;
 
-    let inRange = false;
-    for (let step = 0; step < 80; step++) {
-      const observeResponse = await fetch(
-        `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
-      );
-      const observePayload = await observeResponse.json();
-      expect(observeResponse.status).toBe(200);
-      expect(observePayload.ok).toBe(true);
-      const nearestZombie = observePayload.data.observation.nearestZombie as
-        | { distance: number; dx: number; dy: number }
-        | undefined;
-      const nearestDistance = nearestZombie?.distance;
-
-      if (nearestDistance !== undefined && nearestDistance <= 1) {
-        inRange = true;
-        break;
-      }
-
-      if (!nearestZombie) {
-        break;
-      }
-
-      const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
-      const secondaryDirection = secondaryDirectionTowardDelta(
-        nearestZombie.dx,
-        nearestZombie.dy,
-        primaryDirection,
-      );
-
-      const tryMove = async (direction: Direction) => {
-        const response = await fetch(`${baseUrl}/api/game/action`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session: sessionId,
-            playerId,
-            action: { type: "move", direction },
-          }),
-        });
-        const payload = await response.json();
-        return { response, payload };
-      };
-
-      let moveAttempt = await tryMove(primaryDirection);
-      if (
-        moveAttempt.response.status === 409 &&
-        (moveAttempt.payload.error.code === "MOVE_BLOCKED" || moveAttempt.payload.error.code === "MOVE_OCCUPIED") &&
-        secondaryDirection
-      ) {
-        moveAttempt = await tryMove(secondaryDirection);
-      }
-      if (moveAttempt.response.status === 200) {
-        expect(moveAttempt.payload.ok).toBe(true);
-      } else {
-        expect(moveAttempt.response.status).toBe(409);
-        expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(moveAttempt.payload.error.code);
-        const progressTick = await fetch(`${baseUrl}/api/game/tick`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session: sessionId }),
-        });
-        const progressPayload = await progressTick.json();
-        expect(progressTick.status).toBe(200);
-        expect(progressPayload.ok).toBe(true);
-      }
-    }
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 1,
+    });
 
     expect(inRange).toBe(true);
     const preAttackObserve = await fetch(
