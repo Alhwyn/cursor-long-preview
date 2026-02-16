@@ -1761,11 +1761,11 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.data.mode).toBe("disabled");
   });
 
-  test("server create rejects invalid maxPlayers value", async () => {
+  test("server create rejects invalid maxPlayers values", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
 
-    const response = await fetch(`${baseUrl}/api/servers`, {
+    const tooHighResponse = await fetch(`${baseUrl}/api/servers`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1773,11 +1773,39 @@ describe("RPC API integration (fallback mode)", () => {
         maxPlayers: 64,
       }),
     });
-    const payload = await response.json();
+    const tooHighPayload = await tooHighResponse.json();
 
-    expect(response.status).toBe(400);
-    expect(payload.ok).toBe(false);
-    expect(payload.error.code).toBe("INVALID_MAX_PLAYERS");
+    expect(tooHighResponse.status).toBe(400);
+    expect(tooHighPayload.ok).toBe(false);
+    expect(tooHighPayload.error.code).toBe("INVALID_MAX_PLAYERS");
+
+    const tooLowResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Invalid Capacity Low",
+        maxPlayers: 0,
+      }),
+    });
+    const tooLowPayload = await tooLowResponse.json();
+
+    expect(tooLowResponse.status).toBe(400);
+    expect(tooLowPayload.ok).toBe(false);
+    expect(tooLowPayload.error.code).toBe("INVALID_MAX_PLAYERS");
+
+    const fractionalResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Invalid Capacity Fractional",
+        maxPlayers: 2.5,
+      }),
+    });
+    const fractionalPayload = await fractionalResponse.json();
+
+    expect(fractionalResponse.status).toBe(400);
+    expect(fractionalPayload.ok).toBe(false);
+    expect(fractionalPayload.error.code).toBe("INVALID_MAX_PLAYERS");
   });
 
   test("server create rejects blank name with INVALID_FIELD", async () => {
