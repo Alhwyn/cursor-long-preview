@@ -1,6 +1,7 @@
 export type TileType = "grass" | "wall";
 
 export type GameStatus = "active" | "won" | "lost";
+export type GameMode = "classic" | "endless";
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -39,12 +40,15 @@ export interface Player extends CombatStats {
 
 export interface Zombie extends CombatStats {
   id: string;
+  zombieType: ZombieType;
   position: Vec2;
   hp: number;
   maxHp: number;
   alive: boolean;
   lastAttackTick: number;
 }
+
+export type ZombieType = "normal" | "fast" | "explosive" | "giant";
 
 export interface CompanionAgent extends CombatStats {
   id: string;
@@ -74,6 +78,8 @@ export interface GameState {
   sessionId: string;
   serverId?: string;
   tick: number;
+  wave: number;
+  mode: GameMode;
   status: GameStatus;
   createdAt: number;
   updatedAt: number;
@@ -86,6 +92,7 @@ export interface GameState {
 export interface ObservationEntity {
   id: string;
   kind: "player" | "zombie" | "agent";
+  zombieType?: ZombieType;
   name?: string;
   x: number;
   y: number;

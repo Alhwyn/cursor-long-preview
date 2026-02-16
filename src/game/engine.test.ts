@@ -209,4 +209,61 @@ describe("engine", () => {
     const companionEmote = ticked.companion!.emote;
     expect(["attack", "hurt"]).toContain(companionEmote);
   });
+
+  test("fast zombie can move two tiles in one tick", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.zombieType = "fast";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const ticked = tickGame(state);
+    expect(ticked.zombies["z-1"]?.position).toEqual({ x: 4, y: 2 });
+  });
+
+  test("explosive zombie death damages nearby zombies and defenders", () => {
+    const { state } = createInitialGameState({
+      sessionId: "explosive-test",
+      playerId: "p-1",
+      playerName: "Exploder",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.zombies["z-1"]!.zombieType = "explosive";
+    state.zombies["z-1"]!.hp = 10;
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+    state.zombies["z-2"]!.position = { x: 4, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(afterAttack.zombies["z-1"]?.alive).toBe(false);
+    expect(afterAttack.zombies["z-2"]?.alive).toBe(false);
+    expect(afterAttack.players["p-1"]?.hp).toBeLessThan(afterAttack.players["p-1"]!.maxHp);
+  });
+
+  test("giant zombies move only on even ticks", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.zombieType = "giant";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const firstTick = tickGame(state);
+    expect(firstTick.zombies["z-1"]?.position).toEqual({ x: 6, y: 2 });
+
+    const secondTick = tickGame(firstTick);
+    expect(secondTick.zombies["z-1"]?.position).toEqual({ x: 5, y: 2 });
+  });
+
+  test("endless mode respawns new wave instead of winning", () => {
+    const { state } = createInitialGameState({
+      sessionId: "endless-test",
+      playerId: "p-1",
+      playerName: "Runner",
+      zombieCount: 1,
+      mode: "endless",
+    });
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+    state.zombies["z-1"]!.hp = 10;
+
+    const next = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(next.status).toBe("active");
+    expect(next.wave).toBeGreaterThan(1);
+    expect(Object.values(next.zombies).some(zombie => zombie.alive)).toBe(true);
+  });
 });

@@ -2190,6 +2190,8 @@ describe("RPC API integration (fallback mode)", () => {
     expect(Object.keys(startPayload.data.state.players).length).toBe(4);
     expect(startPayload.data.state.companion).toBeDefined();
     expect(startPayload.data.state.companion.name).toBe("CAI");
+    expect(startPayload.data.state.mode).toBe("endless");
+    expect(startPayload.data.state.wave).toBe(1);
 
     const stateResponse = await fetch(`${baseUrl}/api/party/state?partyId=${encodeURIComponent(partyId)}`);
     const statePayload = await stateResponse.json();

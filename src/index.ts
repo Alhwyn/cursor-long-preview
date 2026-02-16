@@ -51,6 +51,7 @@ import type { Action, Direction, PartyState, Player } from "./game/types";
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
+const VALID_GAME_MODES = ["classic", "endless"] as const;
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 
 function bunParams(request: Request): Record<string, string> {
@@ -164,6 +165,17 @@ function parseActionBody(payload: Record<string, unknown>): Action {
   throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "wait".');
 }
 
+function parseGameMode(value: unknown): "classic" | "endless" | undefined {
+  const mode = optionalString(value, "gameMode");
+  if (!mode) {
+    return undefined;
+  }
+  if (!VALID_GAME_MODES.includes(mode as (typeof VALID_GAME_MODES)[number])) {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "gameMode" must be either "classic" or "endless" when provided.');
+  }
+  return mode as "classic" | "endless";
+}
+
 async function createOrJoinGameSession(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
@@ -173,6 +185,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
   const serverId = optionalNonEmptyString(body.serverId, "serverId");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled");
+  const gameMode = parseGameMode(body.gameMode);
 
   try {
     if (existingSessionId) {
@@ -226,6 +239,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
       playerName,
       zombieCount,
       agentEnabled,
+      gameMode,
     });
 
     if (serverId) {
@@ -547,6 +561,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
   const playerId = requireString(body.playerId, "playerId");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled") ?? true;
+  const gameMode = parseGameMode(body.gameMode) ?? "endless";
 
   let startedParty: PartyState | null = null;
 
@@ -567,6 +582,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
       playerName: leaderMember.playerName,
       zombieCount,
       agentEnabled,
+      gameMode,
     });
 
     for (const member of activeParty.members) {

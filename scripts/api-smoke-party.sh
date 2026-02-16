@@ -111,12 +111,14 @@ assert start_payload["data"]["party"]["status"] == "in_game", (
 )
 assert len(start_payload["data"]["state"]["players"]) == 4, "party-started session should include four players"
 assert start_payload["data"]["state"]["companion"]["name"] == "CAI", "party-started session should include CAI companion"
+assert start_payload["data"]["state"]["mode"] == "endless", "party-started session should default to endless mode"
 
 assert party_state_status == 200, f"party state should be 200, got {party_state_status}"
 assert party_state_payload["ok"] is True, "party state payload should succeed"
 assert party_state_payload["data"]["party"]["sessionId"] == start_payload["data"]["sessionId"], "party state session mismatch"
 assert len(party_state_payload["data"]["state"]["players"]) == 4, "party state should include four players"
 assert party_state_payload["data"]["state"]["companion"]["name"] == "CAI", "party state should expose CAI companion"
+assert party_state_payload["data"]["state"]["mode"] == "endless", "party state should remain endless mode"
 
 assert "event: connected" in stream_preview, "realtime stream did not emit connected event preview"
 

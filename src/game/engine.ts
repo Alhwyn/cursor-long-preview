@@ -2,6 +2,7 @@ import type {
   Action,
   CompanionAgent,
   Direction,
+  GameMode,
   GameMap,
   GameState,
   GameStatus,
@@ -11,6 +12,7 @@ import type {
   Player,
   Vec2,
   Zombie,
+  ZombieType,
 } from "./types";
 
 export class GameRuleError extends Error {
@@ -30,6 +32,7 @@ interface CreateStateInput {
   playerName?: string;
   zombieCount?: number;
   agentEnabled?: boolean;
+  mode?: GameMode;
 }
 
 interface AddPlayerInput {
@@ -45,10 +48,21 @@ const PLAYER_MAX_HP = 120;
 const PLAYER_DAMAGE = 28;
 const PLAYER_ATTACK_RANGE = 1;
 const PLAYER_ATTACK_COOLDOWN = 2;
-const ZOMBIE_MAX_HP = 70;
-const ZOMBIE_DAMAGE = 12;
+const NORMAL_ZOMBIE_HP = 70;
+const NORMAL_ZOMBIE_DAMAGE = 12;
+const NORMAL_ZOMBIE_COOLDOWN = 2;
+const FAST_ZOMBIE_HP = 52;
+const FAST_ZOMBIE_DAMAGE = 10;
+const FAST_ZOMBIE_COOLDOWN = 1;
+const EXPLOSIVE_ZOMBIE_HP = 46;
+const EXPLOSIVE_ZOMBIE_DAMAGE = 14;
+const EXPLOSIVE_ZOMBIE_COOLDOWN = 2;
+const GIANT_ZOMBIE_HP = 210;
+const GIANT_ZOMBIE_DAMAGE = 30;
+const GIANT_ZOMBIE_COOLDOWN = 3;
 const ZOMBIE_ATTACK_RANGE = 1;
-const ZOMBIE_ATTACK_COOLDOWN = 2;
+const EXPLOSION_DAMAGE = 140;
+const EXPLOSION_SPLASH_RADIUS = 1;
 const AGENT_ID = "cai-agent";
 const AGENT_NAME = "CAI";
 const AGENT_MAX_HP = 180;
@@ -226,16 +240,121 @@ function pickZombieTarget(state: GameState, actor: Player, targetId?: string): Z
   return nearestZombie.zombie;
 }
 
+function nextZombieNumericId(state: GameState): number {
+  let maxId = 0;
+  for (const zombieId of Object.keys(state.zombies)) {
+    const parsed = Number.parseInt(zombieId.replace(/^z-/, ""), 10);
+    if (Number.isInteger(parsed) && parsed > maxId) {
+      maxId = parsed;
+    }
+  }
+  return maxId + 1;
+}
+
+function zombieTypeForWaveSlot(wave: number, slot: number): ZombieType {
+  if (wave >= 4 && slot % 8 === 0) {
+    return "giant";
+  }
+  if (wave >= 3 && slot % 5 === 0) {
+    return "explosive";
+  }
+  if (wave >= 2 && slot % 3 === 0) {
+    return "fast";
+  }
+  return "normal";
+}
+
+function enumerateSpawnCandidates(state: GameState): Vec2[] {
+  const defaultCandidates = DEFAULT_ZOMBIE_POSITIONS.map(position => ({ ...position }));
+  const edgeTiles = state.map.tiles
+    .filter(tile => tile.type === "grass")
+    .map(tile => ({ x: tile.x, y: tile.y }))
+    .sort((left, right) => {
+      const edgeLeft = Math.min(left.x, left.y, state.map.width - 1 - left.x, state.map.height - 1 - left.y);
+      const edgeRight = Math.min(right.x, right.y, state.map.width - 1 - right.x, state.map.height - 1 - right.y);
+      if (edgeLeft !== edgeRight) {
+        return edgeLeft - edgeRight;
+      }
+      const depthLeft = left.x + left.y;
+      const depthRight = right.x + right.y;
+      if (depthLeft !== depthRight) {
+        return depthRight - depthLeft;
+      }
+      if (left.x !== right.x) {
+        return right.x - left.x;
+      }
+      return right.y - left.y;
+    });
+
+  return [...defaultCandidates, ...edgeTiles];
+}
+
+function spawnWave(state: GameState, wave: number, count: number): void {
+  const occupied = new Set<string>([
+    ...Object.values(state.players)
+      .filter(player => player.alive)
+      .map(player => toTileKey(player.position)),
+    ...Object.values(state.zombies)
+      .filter(zombie => zombie.alive)
+      .map(zombie => toTileKey(zombie.position)),
+    ...(state.companion?.alive ? [toTileKey(state.companion.position)] : []),
+  ]);
+
+  const candidates = enumerateSpawnCandidates(state);
+  let nextId = nextZombieNumericId(state);
+  let spawned = 0;
+
+  for (const candidate of candidates) {
+    if (spawned >= count) {
+      break;
+    }
+    const tileKey = toTileKey(candidate);
+    if (occupied.has(tileKey)) {
+      continue;
+    }
+    if (!isPassable(state.map, candidate)) {
+      continue;
+    }
+
+    const zombieType = zombieTypeForWaveSlot(wave, spawned + 1);
+    const zombieId = `z-${nextId}`;
+    state.zombies[zombieId] = createZombie(zombieId, candidate, zombieType);
+    occupied.add(tileKey);
+    nextId += 1;
+    spawned += 1;
+  }
+}
+
+function maybeSpawnEndlessWave(state: GameState): void {
+  if (state.mode !== "endless") {
+    return;
+  }
+
+  const hasAliveZombies = findAliveZombies(state).length > 0;
+  if (hasAliveZombies) {
+    return;
+  }
+
+  state.wave += 1;
+  const spawnCount = Math.min(32, Math.max(3, 2 + state.wave * 2));
+  spawnWave(state, state.wave, spawnCount);
+}
+
 function updateGameStatus(state: GameState): void {
-  const alivePlayers = findAlivePlayers(state);
+  const aliveDefenders = findAliveDefenders(state);
   const aliveZombies = findAliveZombies(state);
 
-  if (alivePlayers.length === 0) {
+  if (aliveDefenders.length === 0) {
     state.status = "lost";
     return;
   }
 
   if (aliveZombies.length === 0) {
+    if (state.mode === "endless") {
+      maybeSpawnEndlessWave(state);
+      state.status = "active";
+      return;
+    }
     state.status = "won";
     return;
   }
@@ -255,17 +374,34 @@ function deterministicJoinPlayerId(state: GameState): string {
   return `p-${index}`;
 }
 
-function createZombie(zombieId: string, position: Vec2): Zombie {
+function zombieBaseStats(zombieType: ZombieType): { hp: number; damage: number; cooldown: number } {
+  switch (zombieType) {
+    case "normal":
+      return { hp: NORMAL_ZOMBIE_HP, damage: NORMAL_ZOMBIE_DAMAGE, cooldown: NORMAL_ZOMBIE_COOLDOWN };
+    case "fast":
+      return { hp: FAST_ZOMBIE_HP, damage: FAST_ZOMBIE_DAMAGE, cooldown: FAST_ZOMBIE_COOLDOWN };
+    case "explosive":
+      return { hp: EXPLOSIVE_ZOMBIE_HP, damage: EXPLOSIVE_ZOMBIE_DAMAGE, cooldown: EXPLOSIVE_ZOMBIE_COOLDOWN };
+    case "giant":
+      return { hp: GIANT_ZOMBIE_HP, damage: GIANT_ZOMBIE_DAMAGE, cooldown: GIANT_ZOMBIE_COOLDOWN };
+    default:
+      return assertNever(zombieType);
+  }
+}
+
+function createZombie(zombieId: string, position: Vec2, zombieType: ZombieType): Zombie {
+  const stats = zombieBaseStats(zombieType);
   return {
     id: zombieId,
+    zombieType,
     position,
-    hp: ZOMBIE_MAX_HP,
-    maxHp: ZOMBIE_MAX_HP,
+    hp: stats.hp,
+    maxHp: stats.hp,
     alive: true,
-    attackDamage: ZOMBIE_DAMAGE,
+    attackDamage: stats.damage,
     attackRange: ZOMBIE_ATTACK_RANGE,
-    attackCooldownTicks: ZOMBIE_ATTACK_COOLDOWN,
-    lastAttackTick: -ZOMBIE_ATTACK_COOLDOWN,
+    attackCooldownTicks: stats.cooldown,
+    lastAttackTick: -stats.cooldown,
   };
 }
 
@@ -300,7 +436,7 @@ function createCompanion(position: Vec2): CompanionAgent {
   };
 }
 
-function candidateZombieMoveDirections(zombie: Zombie, target: Player): Direction[] {
+function candidateZombieMoveDirections(zombie: Zombie, target: Player | CompanionAgent): Direction[] {
   const dx = target.position.x - zombie.position.x;
   const dy = target.position.y - zombie.position.y;
 
@@ -314,7 +450,7 @@ function candidateZombieMoveDirections(zombie: Zombie, target: Player): Directio
   return [verticalPrimary, horizontalPrimary];
 }
 
-function tryMoveZombie(state: GameState, zombie: Zombie, target: Player): void {
+function tryMoveZombie(state: GameState, zombie: Zombie, target: Player | CompanionAgent): boolean {
   for (const direction of candidateZombieMoveDirections(zombie, target)) {
     const offset = directionOffset(direction);
     const candidatePosition: Vec2 = {
@@ -330,8 +466,9 @@ function tryMoveZombie(state: GameState, zombie: Zombie, target: Player): void {
     }
 
     zombie.position = candidatePosition;
-    return;
+    return true;
   }
+  return false;
 }
 
 function zombieAttackDefender(zombie: Zombie, defender: Player | CompanionAgent, tick: number): void {
@@ -381,7 +518,13 @@ function resolveZombieTurn(state: GameState): void {
       continue;
     }
 
-    tryMoveZombie(state, zombie, nearestPlayer.player);
+    const movementSteps = zombie.zombieType === "fast" ? 2 : zombie.zombieType === "giant" ? (state.tick % 2 === 0 ? 1 : 0) : 1;
+    for (let step = 0; step < movementSteps; step += 1) {
+      const moved = tryMoveZombie(state, zombie, nearestPlayer.player);
+      if (!moved) {
+        break;
+      }
+    }
   }
 }
 
@@ -435,8 +578,7 @@ function resolveCompanionTurn(state: GameState): void {
   if (target.distance <= companion.attackRange) {
     try {
       validateAttackCooldown(companion.lastAttackTick, companion.attackCooldownTicks, state.tick, "Companion");
-      target.zombie.hp = Math.max(0, target.zombie.hp - companion.attackDamage);
-      target.zombie.alive = target.zombie.hp > 0;
+      applyDamageToZombie(state, target.zombie.id, companion.attackDamage);
       companion.lastAttackTick = state.tick;
       companion.emote = "attack";
       return;
@@ -448,6 +590,80 @@ function resolveCompanionTurn(state: GameState): void {
   }
 
   tryMoveCompanion(state, companion, target.zombie);
+}
+
+function applyExplosionDamageToDefenders(state: GameState, center: Vec2): void {
+  for (const player of Object.values(state.players)) {
+    if (!player.alive) {
+      continue;
+    }
+    if (manhattanDistance(player.position, center) > EXPLOSION_SPLASH_RADIUS) {
+      continue;
+    }
+    player.hp = Math.max(0, player.hp - Math.ceil(EXPLOSION_DAMAGE * 0.3));
+    player.alive = player.hp > 0;
+  }
+
+  if (state.companion?.alive && manhattanDistance(state.companion.position, center) <= EXPLOSION_SPLASH_RADIUS) {
+    state.companion.hp = Math.max(0, state.companion.hp - Math.ceil(EXPLOSION_DAMAGE * 0.35));
+    state.companion.alive = state.companion.hp > 0;
+    state.companion.emote = state.companion.alive ? "hurt" : "idle";
+  }
+}
+
+function resolveZombieExplosions(state: GameState, initialExploderId: string): void {
+  const queue: string[] = [initialExploderId];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const zombieId = queue.shift();
+    if (!zombieId || visited.has(zombieId)) {
+      continue;
+    }
+    visited.add(zombieId);
+
+    const exploder = state.zombies[zombieId];
+    if (!exploder) {
+      continue;
+    }
+
+    applyExplosionDamageToDefenders(state, exploder.position);
+
+    for (const target of Object.values(state.zombies)) {
+      if (!target.alive || target.id === zombieId) {
+        continue;
+      }
+      if (manhattanDistance(target.position, exploder.position) > EXPLOSION_SPLASH_RADIUS) {
+        continue;
+      }
+      target.hp = Math.max(0, target.hp - EXPLOSION_DAMAGE);
+      if (target.hp <= 0) {
+        target.hp = 0;
+        target.alive = false;
+        if (target.zombieType === "explosive") {
+          queue.push(target.id);
+        }
+      }
+    }
+  }
+}
+
+function applyDamageToZombie(state: GameState, zombieId: string, damage: number): void {
+  const target = state.zombies[zombieId];
+  if (!target || !target.alive) {
+    return;
+  }
+
+  target.hp = Math.max(0, target.hp - damage);
+  if (target.hp > 0) {
+    return;
+  }
+
+  target.hp = 0;
+  target.alive = false;
+  if (target.zombieType === "explosive") {
+    resolveZombieExplosions(state, target.id);
+  }
 }
 
 function resolveAction(state: GameState, playerId: string, action: Action): void {
@@ -484,8 +700,7 @@ function resolveAction(state: GameState, playerId: string, action: Action): void
       throw new GameRuleError("TARGET_OUT_OF_RANGE", "Target zombie is out of attack range.");
     }
 
-    target.hp = Math.max(0, target.hp - player.attackDamage);
-    target.alive = target.hp > 0;
+    applyDamageToZombie(state, target.id, player.attackDamage);
     player.lastAttackTick = state.tick;
     return;
   }
@@ -563,6 +778,7 @@ function resolveCompanionSpawn(map: GameMap, occupiedKeys: Set<string>): Vec2 {
 export function createInitialGameState(input: CreateStateInput): { state: GameState; player: Player } {
   const sessionId = input.sessionId;
   const serverId = input.serverId;
+  const mode = input.mode ?? "classic";
   const playerId = input.playerId ?? deterministicInitialPlayerId(sessionId);
   const playerName = input.playerName?.trim() || "Survivor-1";
   const requestedZombieCount = input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length;
@@ -584,7 +800,8 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
     const position = DEFAULT_ZOMBIE_POSITIONS[index] ?? fallbackPosition;
     const tile = tileAt(map, position);
     const finalPosition = tile?.type === "grass" ? position : fallbackPosition;
-    zombies[`z-${index + 1}`] = createZombie(`z-${index + 1}`, finalPosition);
+    const zombieType = zombieTypeForWaveSlot(1, index + 1);
+    zombies[`z-${index + 1}`] = createZombie(`z-${index + 1}`, finalPosition, zombieType);
   }
 
   let companion: CompanionAgent | undefined;
@@ -601,6 +818,8 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
     sessionId,
     serverId,
     tick: 0,
+    wave: 1,
+    mode,
     status: "active",
     createdAt,
     updatedAt: createdAt,
@@ -654,6 +873,7 @@ function zombieToObservationEntity(zombie: Zombie): ObservationEntity {
   return {
     id: zombie.id,
     kind: "zombie",
+    zombieType: zombie.zombieType,
     x: zombie.position.x,
     y: zombie.position.y,
     hp: zombie.hp,

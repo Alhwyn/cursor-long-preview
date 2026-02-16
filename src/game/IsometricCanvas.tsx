@@ -79,10 +79,24 @@ function drawEntity(
   isDead: boolean,
 ): void {
   const bodyWidth = entity.kind === "player" ? 16 : entity.kind === "agent" ? 18 : 14;
-  const bodyHeight = entity.kind === "player" ? 22 : entity.kind === "agent" ? 20 : 18;
-  const fill = entity.kind === "player" ? "#5eead4" : entity.kind === "agent" ? "#fde68a" : "#fb7185";
+  const baseZombieSize = entity.zombieType === "giant" ? 22 : entity.zombieType === "fast" ? 12 : 14;
+  const bodyHeight =
+    entity.kind === "player" ? 22 : entity.kind === "agent" ? 20 : entity.zombieType === "giant" ? 28 : 18;
+  const fill =
+    entity.kind === "player"
+      ? "#5eead4"
+      : entity.kind === "agent"
+        ? "#fde68a"
+        : entity.zombieType === "fast"
+          ? "#f59e0b"
+          : entity.zombieType === "explosive"
+            ? "#f97316"
+            : entity.zombieType === "giant"
+              ? "#dc2626"
+              : "#fb7185";
+  const resolvedBodyWidth = entity.kind === "zombie" ? baseZombieSize : bodyWidth;
   const deadFill = "#6b7280";
-  const px = centerX - bodyWidth / 2;
+  const px = centerX - resolvedBodyWidth / 2;
   const py = centerY - bodyHeight - 18;
   const hpRatio = Math.max(0, Math.min(1, entity.hp / Math.max(1, entity.maxHp)));
 
@@ -95,22 +109,22 @@ function drawEntity(
 
   ctx.globalAlpha = 1;
   ctx.fillStyle = isDead ? deadFill : fill;
-  ctx.fillRect(px, py, bodyWidth, bodyHeight);
+  ctx.fillRect(px, py, resolvedBodyWidth, bodyHeight);
   ctx.fillStyle = isDead ? "#475569" : "#0f172a";
-  ctx.fillRect(px + 2, py + 5, bodyWidth - 4, 2);
-  ctx.fillRect(px + 2, py + bodyHeight - 4, bodyWidth - 4, 2);
+  ctx.fillRect(px + 2, py + 5, resolvedBodyWidth - 4, 2);
+  ctx.fillRect(px + 2, py + bodyHeight - 4, resolvedBodyWidth - 4, 2);
   if (entity.kind === "agent" && !isDead) {
     ctx.fillStyle = "#111827";
     ctx.fillRect(px + 3, py + 8, 2, 2);
-    ctx.fillRect(px + bodyWidth - 5, py + 8, 2, 2);
-    ctx.fillRect(px + Math.floor(bodyWidth / 2) - 2, py + 13, 4, 2);
+    ctx.fillRect(px + resolvedBodyWidth - 5, py + 8, 2, 2);
+    ctx.fillRect(px + Math.floor(resolvedBodyWidth / 2) - 2, py + 13, 4, 2);
   }
 
   // HP bar
   ctx.fillStyle = "#0f172a";
-  ctx.fillRect(px - 1, py - 8, bodyWidth + 2, 4);
+  ctx.fillRect(px - 1, py - 8, resolvedBodyWidth + 2, 4);
   ctx.fillStyle = hpRatio > 0.5 ? "#22c55e" : hpRatio > 0.25 ? "#f59e0b" : "#f43f5e";
-  ctx.fillRect(px, py - 7, bodyWidth * hpRatio, 2.5);
+  ctx.fillRect(px, py - 7, resolvedBodyWidth * hpRatio, 2.5);
   ctx.restore();
 }
 
