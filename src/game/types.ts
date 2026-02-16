@@ -61,6 +61,8 @@ export interface CompanionAgent extends CombatStats {
   emote: "idle" | "focus" | "attack" | "hurt";
 }
 
+export type BuildType = "barricade" | "ally_robot";
+
 export type Action =
   | {
       type: "move";
@@ -72,6 +74,11 @@ export type Action =
     }
   | {
       type: "wait";
+    }
+  | {
+      type: "build";
+      buildType: BuildType;
+      direction: Direction;
     };
 
 export interface GameState {
@@ -84,9 +91,11 @@ export interface GameState {
   createdAt: number;
   updatedAt: number;
   map: GameMap;
+  scrap: number;
   players: Record<string, Player>;
   zombies: Record<string, Zombie>;
   companion?: CompanionAgent;
+  builtRobots: Record<string, CompanionAgent>;
 }
 
 export interface ObservationEntity {
@@ -122,6 +131,8 @@ export interface Observation {
   players: ObservationEntity[];
   zombies: ObservationEntity[];
   companion?: ObservationEntity;
+  scrap: number;
+  builtRobots: ObservationEntity[];
   entities: ObservationEntity[];
 }
 

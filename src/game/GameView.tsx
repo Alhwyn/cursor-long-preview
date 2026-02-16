@@ -802,6 +802,8 @@ export function GameView() {
             <div className="text-sm text-slate-300">Mode: {state?.mode ?? "—"}</div>
             <div className="text-sm text-slate-300">Wave: {state?.wave ?? 0}</div>
             <div className="text-sm text-slate-300">Map: {state ? `${state.map.width}×${state.map.height}` : "—"}</div>
+            <div className="text-sm text-slate-300">Scrap: {state?.scrap ?? 0}</div>
+            <div className="text-sm text-slate-300">Built Robots: {state ? Object.values(state.builtRobots).filter(robot => robot.alive).length : 0}</div>
             <div className="text-sm text-slate-300">HP: {self ? `${self.hp}/${self.maxHp}` : "—"}</div>
             <div className="text-sm text-slate-300">Terminators Active: {aliveZombies}</div>
             <div className="text-sm text-slate-300">

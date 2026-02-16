@@ -52,10 +52,11 @@ import {
   type SessionRecord,
   stepSession,
 } from "./game/sessions";
-import type { Action, Direction, PartyState, Player } from "./game/types";
+import type { Action, BuildType, Direction, PartyState, Player } from "./game/types";
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
+const VALID_BUILD_TYPES: ReadonlyArray<BuildType> = ["barricade", "ally_robot"];
 const VALID_GAME_MODES = ["classic", "endless"] as const;
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 
@@ -84,6 +85,7 @@ function mapDomainError(errorValue: unknown): HttpError {
     case "INVALID_PARTY_CODE":
     case "INVALID_ACCESS_KEY_TTL":
     case "INVALID_ACCESS_KEY_MAX_USES":
+    case "INVALID_BUILD_TYPE":
     case "NO_SPAWN":
       return new HttpError(400, errorValue.code, errorValue.message);
     case "ACCESS_KEY_NOT_FOUND":
@@ -103,6 +105,10 @@ function mapDomainError(errorValue: unknown): HttpError {
     case "PARTY_MEMBER_EXISTS":
     case "PARTY_NOT_OPEN":
     case "PARTY_NOT_READY":
+    case "INSUFFICIENT_SCRAP":
+    case "BUILD_LIMIT_REACHED":
+    case "BUILD_BLOCKED":
+    case "BUILD_OCCUPIED":
       return new HttpError(409, errorValue.code, errorValue.message);
     default:
       return new HttpError(500, errorValue.code, errorValue.message);
@@ -173,7 +179,23 @@ function parseActionBody(payload: Record<string, unknown>): Action {
     };
   }
 
-  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "wait".');
+  if (actionType === "build") {
+    const buildTypeRaw = requireString(payload.buildType, "buildType");
+    if (!VALID_BUILD_TYPES.includes(buildTypeRaw as BuildType)) {
+      throw new HttpError(400, "INVALID_FIELD", `buildType must be one of: ${VALID_BUILD_TYPES.join(", ")}`);
+    }
+    const directionRaw = requireString(payload.direction, "direction");
+    if (!VALID_DIRECTIONS.includes(directionRaw as Direction)) {
+      throw new HttpError(400, "INVALID_DIRECTION", `direction must be one of: ${VALID_DIRECTIONS.join(", ")}`);
+    }
+    return {
+      type: "build",
+      buildType: buildTypeRaw as BuildType,
+      direction: directionRaw as Direction,
+    };
+  }
+
+  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "wait", "build".');
 }
 
 function parseGameMode(value: unknown): "classic" | "endless" | undefined {

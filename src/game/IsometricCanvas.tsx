@@ -145,6 +145,10 @@ export function IsometricCanvas({ state, focusPlayerId, width = 920, height = 56
       ...entity,
       kind: "zombie" as const,
     }));
+    const builtRobots = Object.values(state.builtRobots).map(entity => ({
+      ...entity,
+      kind: "agent" as const,
+    }));
     const companion = state.companion
       ? [
           {
@@ -154,7 +158,7 @@ export function IsometricCanvas({ state, focusPlayerId, width = 920, height = 56
         ]
       : [];
 
-    return [...players, ...zombies, ...companion].sort((a, b) => {
+    return [...players, ...zombies, ...builtRobots, ...companion].sort((a, b) => {
       const depthA = a.position.x + a.position.y;
       const depthB = b.position.x + b.position.y;
       if (depthA !== depthB) {

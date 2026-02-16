@@ -7,6 +7,7 @@ Server-authoritative terminator survival game with:
 - 4-player party lifecycle APIs (create/join/ready/start/leave)
 - realtime SSE party/session updates
 - optional CAI combat companion agent (enabled by default for party starts)
+- scrap economy + build actions (barricades and deployable ally robots)
 - endless wave mode with terminator archetypes:
   - normal (ranged shooter),
   - flying (fast mobility),

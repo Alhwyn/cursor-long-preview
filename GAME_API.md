@@ -198,6 +198,7 @@ Observation shape:
     "hp": 70,
     "alive": true
   },
+  "scrap": 32,
   "companion": {
     "id": "cai-agent",
     "kind": "agent",
@@ -208,6 +209,7 @@ Observation shape:
     "maxHp": 180,
     "alive": true
   },
+  "builtRobots": [],
   "players": [],
   "zombies": [],
   "entities": []
@@ -237,6 +239,7 @@ Action schema:
 
 - `{"type":"move","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"attack","targetId":"optional-terminator-id"}` (`targetId` must be non-empty when provided)
+- `{"type":"build","buildType":"barricade"|"ally_robot","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"wait"}`
 
 `session` and `playerId` are required non-empty strings and are trimmed before lookup.
@@ -528,6 +531,7 @@ Use this stream for party/lobby sync and in-match state push updates.
 - `ACCESS_KEY_NOT_FOUND`, `ACCESS_KEY_EXPIRED`, `ACCESS_KEY_EXHAUSTED`, `ACCESS_KEY_SESSION_MISMATCH`
 - `PARTY_NOT_FOUND`, `PARTY_MEMBER_NOT_FOUND`, `PARTY_NOT_LEADER`
 - `PARTY_FULL`, `PARTY_NOT_OPEN`, `PARTY_NOT_READY`, `PARTY_MEMBER_EXISTS`
+- `INSUFFICIENT_SCRAP`, `BUILD_BLOCKED`, `BUILD_OCCUPIED`, `BUILD_LIMIT_REACHED`
 - `PLAYER_DEAD`, `MOVE_BLOCKED`, `MOVE_OCCUPIED`, `TARGET_OUT_OF_RANGE`, `ATTACK_COOLDOWN`, `SERVER_FULL`, `GAME_COMPLETED`
 - `UNAUTHORIZED`, `FORBIDDEN`
 - `SUPABASE_QUERY_FAILED`, `SUPABASE_CREATE_FAILED`, `SUPABASE_JOIN_FAILED`, `SUPABASE_SNAPSHOT_FAILED`
@@ -541,6 +545,7 @@ Use this stream for party/lobby sync and in-match state push updates.
 3. Decide action:
    - if zombie adjacent => `attack`
    - else move to reduce distance.
+   - if enough `scrap`, optionally `build` barricades or ally robots.
 4. `POST /api/game/action`.
 5. Repeat 2–4 until `status` is `won` or `lost`.
 

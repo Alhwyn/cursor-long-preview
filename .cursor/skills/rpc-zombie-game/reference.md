@@ -3,6 +3,7 @@
 ## Endpoint Index
 
 - `POST /api/game/join`
+- `POST /api/agent/access-key`
 - `GET /api/game/state`
 - `GET /api/game/observe`
 - `POST /api/game/action`
@@ -93,6 +94,18 @@ curl -s -X POST http://127.0.0.1:3000/api/game/action \
   }'
 ```
 
+### Build (barricade / ally robot)
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/action \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session":"<SESSION>",
+    "playerId":"<PLAYER>",
+    "action":{"type":"build","buildType":"barricade","direction":"right"}
+  }'
+```
+
 ### Manual Tick
 
 ```bash
@@ -161,6 +174,9 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 - `TARGET_OUT_OF_RANGE` -> move first.
 - `ATTACK_COOLDOWN` -> move or wait one turn.
 - `MOVE_BLOCKED` / `MOVE_OCCUPIED` -> pick alternate direction.
+- `INSUFFICIENT_SCRAP` -> kill more terminators to collect scrap before build actions.
+- `BUILD_BLOCKED` / `BUILD_OCCUPIED` -> pick another direction/tile for build.
+- `BUILD_LIMIT_REACHED` -> too many ally robots active; wait for one to be destroyed.
 - `SERVER_FULL` -> choose another server or create a new one.
 - `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode (`UNAUTHORIZED` also covers missing/non-Bearer auth headers; Bearer scheme parsing is case-insensitive).
 - In enabled mode, auth validation runs before JSON body parsing on `POST /api/servers`.

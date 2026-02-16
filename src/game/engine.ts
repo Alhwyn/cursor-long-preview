@@ -1,5 +1,6 @@
 import type {
   Action,
+  BuildType,
   CompanionAgent,
   Direction,
   GameMode,
@@ -69,6 +70,28 @@ const AGENT_DAMAGE = 22;
 const AGENT_ATTACK_RANGE = 1;
 const AGENT_ATTACK_COOLDOWN = 1;
 const AGENT_START: Vec2 = { x: 3, y: 2 };
+const BUILDER_BARRICADE_COST = 24;
+const BUILDER_ALLY_ROBOT_COST = 80;
+const BUILDER_ALLY_ROBOT_MAX_ACTIVE = 3;
+const BUILDER_ALLY_ROBOT_MAX_HP = 150;
+const BUILDER_ALLY_ROBOT_DAMAGE = 24;
+const BUILDER_ALLY_ROBOT_ATTACK_RANGE = 1;
+const BUILDER_ALLY_ROBOT_COOLDOWN = 1;
+
+function scrapRewardForZombieType(zombieType: ZombieType): number {
+  switch (zombieType) {
+    case "normal":
+      return 8;
+    case "flying":
+      return 10;
+    case "explosive":
+      return 12;
+    case "mech":
+      return 20;
+    default:
+      return assertNever(zombieType);
+  }
+}
 function defaultTerminatorPositions(width: number, height: number): Vec2[] {
   const midX = Math.floor(width / 2);
   const midY = Math.floor(height / 2);
@@ -94,6 +117,9 @@ function cloneState(state: GameState): GameState {
     },
     players: Object.fromEntries(Object.entries(state.players).map(([id, player]) => [id, { ...player, position: { ...player.position } }])),
     zombies: Object.fromEntries(Object.entries(state.zombies).map(([id, zombie]) => [id, { ...zombie, position: { ...zombie.position } }])),
+    builtRobots: Object.fromEntries(
+      Object.entries(state.builtRobots).map(([id, robot]) => [id, { ...robot, position: { ...robot.position } }]),
+    ),
     companion: state.companion
       ? {
           ...state.companion,
@@ -180,6 +206,7 @@ function findAliveDefenders(state: GameState): Array<Player | CompanionAgent> {
   if (state.companion?.alive) {
     defenders.push(state.companion);
   }
+  defenders.push(...Object.values(state.builtRobots).filter(robot => robot.alive));
   return defenders;
 }
 
@@ -204,7 +231,7 @@ function isOccupiedByLivingEntity(state: GameState, position: Vec2, excludedEnti
       state.companion.alive &&
       state.companion.id !== excludedEntityId &&
       toTileKey(state.companion.position) === key,
-  );
+  ) || Object.values(state.builtRobots).some(robot => robot.alive && robot.id !== excludedEntityId && toTileKey(robot.position) === key);
 }
 
 function ensureSessionIsActive(state: GameState): void {
@@ -311,6 +338,9 @@ function spawnWave(state: GameState, wave: number, count: number): void {
     ...Object.values(state.zombies)
       .filter(zombie => zombie.alive)
       .map(zombie => toTileKey(zombie.position)),
+    ...Object.values(state.builtRobots)
+      .filter(robot => robot.alive)
+      .map(robot => toTileKey(robot.position)),
     ...(state.companion?.alive ? [toTileKey(state.companion.position)] : []),
   ]);
 
@@ -452,6 +482,33 @@ function createCompanion(position: Vec2): CompanionAgent {
   };
 }
 
+function nextBuiltRobotId(state: GameState): string {
+  let maxId = 0;
+  for (const robotId of Object.keys(state.builtRobots)) {
+    const parsed = Number.parseInt(robotId.replace(/^ally-/, ""), 10);
+    if (Number.isInteger(parsed) && parsed > maxId) {
+      maxId = parsed;
+    }
+  }
+  return `ally-${maxId + 1}`;
+}
+
+function createBuiltRobot(robotId: string, position: Vec2): CompanionAgent {
+  return {
+    id: robotId,
+    name: "Guardian Bot",
+    position,
+    hp: BUILDER_ALLY_ROBOT_MAX_HP,
+    maxHp: BUILDER_ALLY_ROBOT_MAX_HP,
+    alive: true,
+    attackDamage: BUILDER_ALLY_ROBOT_DAMAGE,
+    attackRange: BUILDER_ALLY_ROBOT_ATTACK_RANGE,
+    attackCooldownTicks: BUILDER_ALLY_ROBOT_COOLDOWN,
+    lastAttackTick: -BUILDER_ALLY_ROBOT_COOLDOWN,
+    emote: "idle",
+  };
+}
+
 function candidateZombieMoveDirections(zombie: Zombie, target: Player | CompanionAgent): Direction[] {
   const dx = target.position.x - zombie.position.x;
   const dy = target.position.y - zombie.position.y;
@@ -581,8 +638,7 @@ function tryMoveCompanion(state: GameState, companion: CompanionAgent, target: Z
   }
 }
 
-function resolveCompanionTurn(state: GameState): void {
-  const companion = state.companion;
+function resolveSingleAgentTurn(state: GameState, companion: CompanionAgent | undefined): void {
   if (!companion || !companion.alive || state.status !== "active") {
     return;
   }
@@ -613,6 +669,20 @@ function resolveCompanionTurn(state: GameState): void {
   tryMoveCompanion(state, companion, target.zombie);
 }
 
+function resolveCompanionTurn(state: GameState): void {
+  resolveSingleAgentTurn(state, state.companion);
+}
+
+function resolveBuiltRobotTurns(state: GameState): void {
+  const robots = Object.values(state.builtRobots)
+    .filter(robot => robot.alive)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const robot of robots) {
+    resolveSingleAgentTurn(state, robot);
+  }
+}
+
 function applyExplosionDamageToDefenders(state: GameState, center: Vec2): void {
   for (const player of Object.values(state.players)) {
     if (!player.alive) {
@@ -629,6 +699,18 @@ function applyExplosionDamageToDefenders(state: GameState, center: Vec2): void {
     state.companion.hp = Math.max(0, state.companion.hp - Math.ceil(EXPLOSION_DAMAGE * 0.35));
     state.companion.alive = state.companion.hp > 0;
     state.companion.emote = state.companion.alive ? "hurt" : "idle";
+  }
+
+  for (const robot of Object.values(state.builtRobots)) {
+    if (!robot.alive) {
+      continue;
+    }
+    if (manhattanDistance(robot.position, center) > EXPLOSION_SPLASH_RADIUS) {
+      continue;
+    }
+    robot.hp = Math.max(0, robot.hp - Math.ceil(EXPLOSION_DAMAGE * 0.3));
+    robot.alive = robot.hp > 0;
+    robot.emote = robot.alive ? "hurt" : "idle";
   }
 }
 
@@ -682,8 +764,70 @@ function applyDamageToZombie(state: GameState, zombieId: string, damage: number)
 
   target.hp = 0;
   target.alive = false;
+  state.scrap += scrapRewardForZombieType(target.zombieType);
   if (target.zombieType === "explosive") {
     resolveZombieExplosions(state, target.id);
+  }
+}
+
+function consumeScrap(state: GameState, amount: number): void {
+  if (state.scrap < amount) {
+    throw new GameRuleError("INSUFFICIENT_SCRAP", `Need ${amount} scrap, only ${state.scrap} available.`);
+  }
+  state.scrap -= amount;
+}
+
+function buildTargetPosition(player: Player, direction: Direction): Vec2 {
+  const delta = directionOffset(direction);
+  return {
+    x: player.position.x + delta.x,
+    y: player.position.y + delta.y,
+  };
+}
+
+function applyBuildBarricade(state: GameState, player: Player, direction: Direction): void {
+  const targetPosition = buildTargetPosition(player, direction);
+  const tile = tileAt(state.map, targetPosition);
+  if (!tile || tile.type !== "grass") {
+    throw new GameRuleError("BUILD_BLOCKED", "Cannot build barricade on this tile.");
+  }
+  if (isOccupiedByLivingEntity(state, targetPosition)) {
+    throw new GameRuleError("BUILD_OCCUPIED", "Cannot build barricade on an occupied tile.");
+  }
+
+  consumeScrap(state, BUILDER_BARRICADE_COST);
+  tile.type = "wall";
+}
+
+function applyBuildAllyRobot(state: GameState, player: Player, direction: Direction): void {
+  const activeRobots = Object.values(state.builtRobots).filter(robot => robot.alive).length;
+  if (activeRobots >= BUILDER_ALLY_ROBOT_MAX_ACTIVE) {
+    throw new GameRuleError("BUILD_LIMIT_REACHED", `Maximum ${BUILDER_ALLY_ROBOT_MAX_ACTIVE} ally robots are already active.`);
+  }
+
+  const targetPosition = buildTargetPosition(player, direction);
+  if (!isPassable(state.map, targetPosition)) {
+    throw new GameRuleError("BUILD_BLOCKED", "Cannot deploy ally robot on blocked tile.");
+  }
+  if (isOccupiedByLivingEntity(state, targetPosition)) {
+    throw new GameRuleError("BUILD_OCCUPIED", "Cannot deploy ally robot on occupied tile.");
+  }
+
+  consumeScrap(state, BUILDER_ALLY_ROBOT_COST);
+  const robotId = nextBuiltRobotId(state);
+  state.builtRobots[robotId] = createBuiltRobot(robotId, targetPosition);
+}
+
+function applyBuildAction(state: GameState, player: Player, buildType: BuildType, direction: Direction): void {
+  switch (buildType) {
+    case "barricade":
+      applyBuildBarricade(state, player, direction);
+      return;
+    case "ally_robot":
+      applyBuildAllyRobot(state, player, direction);
+      return;
+    default:
+      assertNever(buildType);
   }
 }
 
@@ -726,6 +870,11 @@ function resolveAction(state: GameState, playerId: string, action: Action): void
     return;
   }
 
+  if (action.type === "build") {
+    applyBuildAction(state, player, action.buildType, action.direction);
+    return;
+  }
+
   assertNever(action);
 }
 
@@ -747,6 +896,9 @@ export function addPlayerToState({ state, playerId, playerName }: AddPlayerInput
     ...Object.values(state.zombies)
       .filter(zombie => zombie.alive)
       .map(zombie => toTileKey(zombie.position)),
+    ...Object.values(state.builtRobots)
+      .filter(robot => robot.alive)
+      .map(robot => toTileKey(robot.position)),
     ...(state.companion && state.companion.alive ? [toTileKey(state.companion.position)] : []),
   ]);
 
@@ -846,9 +998,11 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
     createdAt,
     updatedAt: createdAt,
     map,
+    scrap: 0,
     players: { [player.id]: player },
     zombies,
     companion,
+    builtRobots: {},
   };
 
   updateGameStatus(state);
@@ -860,6 +1014,7 @@ export function tickGame(state: GameState): GameState {
   ensureSessionIsActive(nextState);
   nextState.tick += 1;
   resolveCompanionTurn(nextState);
+  resolveBuiltRobotTurns(nextState);
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
   nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
@@ -872,6 +1027,7 @@ export function applyAction(state: GameState, playerId: string, action: Action):
   resolveAction(nextState, playerId, action);
   nextState.tick += 1;
   resolveCompanionTurn(nextState);
+  resolveBuiltRobotTurns(nextState);
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
   nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
@@ -929,6 +1085,9 @@ export function toObservation(state: GameState, playerId: string): Observation {
   const zombies = Object.values(state.zombies)
     .map(zombieEntity => zombieToObservationEntity(zombieEntity))
     .sort((a, b) => a.id.localeCompare(b.id));
+  const builtRobots = Object.values(state.builtRobots)
+    .map(robotEntity => companionToObservationEntity(robotEntity))
+    .sort((a, b) => a.id.localeCompare(b.id));
   const aliveZombieEntities = zombies.filter(zombie => zombie.alive);
   const companion = state.companion ? companionToObservationEntity(state.companion) : undefined;
 
@@ -956,10 +1115,12 @@ export function toObservation(state: GameState, playerId: string): Observation {
     status: state.status,
     self: playerToObservationEntity(player),
     nearestZombie,
+    scrap: state.scrap,
     players,
     zombies,
     companion,
-    entities: [...players, ...zombies, ...(companion ? [companion] : [])].sort((a, b) => a.id.localeCompare(b.id)),
+    builtRobots,
+    entities: [...players, ...zombies, ...builtRobots, ...(companion ? [companion] : [])].sort((a, b) => a.id.localeCompare(b.id)),
   };
 }
 

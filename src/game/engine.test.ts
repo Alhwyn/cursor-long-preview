@@ -60,6 +60,50 @@ describe("engine", () => {
     expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of attack range");
   });
 
+  test("build barricade spends scrap and converts tile to wall", () => {
+    const state = makeState();
+    state.scrap = 30;
+
+    const next = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "barricade",
+      direction: "right",
+    });
+
+    expect(next.scrap).toBe(6);
+    expect(next.map.tiles.find(tile => tile.x === 3 && tile.y === 2)?.type).toBe("wall");
+  });
+
+  test("build ally robot consumes scrap and deploys guardian bot", () => {
+    const state = makeState();
+    state.scrap = 90;
+    state.zombies["z-1"]!.position = { x: 4, y: 2 };
+
+    const next = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "ally_robot",
+      direction: "right",
+    });
+
+    expect(next.scrap).toBe(10);
+    const builtRobot = Object.values(next.builtRobots)[0];
+    expect(builtRobot).toBeDefined();
+    expect(builtRobot?.name).toBe("Guardian Bot");
+    expect(next.zombies["z-1"]?.hp).toBeLessThan(70);
+  });
+
+  test("build action requires enough scrap", () => {
+    const state = makeState();
+    state.scrap = 0;
+    expect(() =>
+      applyAction(state, "p-1", {
+        type: "build",
+        buildType: "ally_robot",
+        direction: "right",
+      }),
+    ).toThrow("Need 80 scrap");
+  });
+
   test("explosive terminator moves toward nearest player on tick", () => {
     const state = makeState();
     state.zombies["z-1"]!.zombieType = "explosive";
@@ -100,6 +144,7 @@ describe("engine", () => {
     state.zombies["z-1"]!.hp = 10;
     const next = applyAction(state, "p-1", { type: "attack" });
     expect(next.zombies["z-1"]?.alive).toBe(false);
+    expect(next.scrap).toBeGreaterThan(0);
     expect(next.status).toBe("won");
   });
 

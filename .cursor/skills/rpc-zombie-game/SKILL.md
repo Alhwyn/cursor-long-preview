@@ -19,7 +19,7 @@ Leverage CAI companion support when enabled (combat-capable in-session agent all
 2. Store `sessionId` and `playerId`.
 3. Loop:
    - `GET /api/game/observe?session=<id>&player=<id>`
-   - Decide action (`move`, `attack`, `wait`)
+   - Decide action (`move`, `attack`, `build`, `wait`)
    - `POST /api/game/action`
 4. Stop when state/observation `status` becomes `won` or `lost`.
 
@@ -107,6 +107,10 @@ Default behavior:
 - Prefer attacking when nearest terminator distance is `<= 1`.
 - Otherwise move along axis indicated by nearest terminator `(dx, dy)`.
 - Respect cooldown conflicts (`ATTACK_COOLDOWN`) by sending `wait` or movement.
+- Build economy:
+  - `state.scrap` increases when terminators are destroyed.
+  - Build barricade with `{"type":"build","buildType":"barricade","direction":"<dir>"}` (costs scrap).
+  - Deploy ally robot with `{"type":"build","buildType":"ally_robot","direction":"<dir>"}` when enough scrap.
 
 ## References
 
