@@ -2215,6 +2215,55 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
   });
 
+  test("attack cooldown is enforced before trimmed explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CooldownTrimmedUnknownAttackTarget", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 1,
+    });
+    expect(inRange).toBe(true);
+
+    const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: "z-1" },
+      }),
+    });
+    const firstAttackPayload = await firstAttack.json();
+    expect(firstAttack.status).toBe(200);
+    expect(firstAttackPayload.ok).toBe(true);
+
+    const secondAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: "  z-missing  " },
+      }),
+    });
+    const secondAttackPayload = await secondAttack.json();
+    expect(secondAttack.status).toBe(409);
+    expect(secondAttackPayload.ok).toBe(false);
+    expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
   test("player can mint temporary agent access key and agent joins by key", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

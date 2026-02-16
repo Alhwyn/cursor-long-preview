@@ -73,6 +73,14 @@ describe("engine", () => {
     expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "z-missing" })).toThrow("cooldown");
   });
 
+  test("attack cooldown is enforced before trimmed explicit target validation", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "  z-missing  " })).toThrow("cooldown");
+  });
+
   test("attack with destroyed explicit target is rejected", () => {
     const { state } = createInitialGameState({
       sessionId: "session-destroyed-attack-target",

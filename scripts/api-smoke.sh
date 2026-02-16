@@ -47,6 +47,9 @@ cooldown_trimmed_unknown_target_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smok
 cooldown_unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-cooldown-unknown-target-attack.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"z-missing\"}}")"
+cooldown_trimmed_unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-cooldown-trimmed-unknown-target-attack.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
+  -H "Content-Type: application/json" \
+  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"  z-missing  \"}}")"
 
 bad_direction_status="$(curl -sS -o /tmp/rpc-zombie-smoke-bad-direction.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
@@ -155,6 +158,29 @@ duplicate_server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["
 duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-one.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeA"}')"
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
+
+python3 - <<'PY' "${cooldown_trimmed_unknown_target_attack_status}"
+import json
+import pathlib
+import sys
+
+cooldown_trimmed_unknown_target_attack_status = int(sys.argv[1])
+cooldown_trimmed_unknown_target_attack_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-cooldown-trimmed-unknown-target-attack.json").read_text()
+)
+
+assert cooldown_trimmed_unknown_target_attack_status == 409, (
+    "cooldown attack with trimmed unknown explicit target should be 409, "
+    f"got {cooldown_trimmed_unknown_target_attack_status}"
+)
+assert cooldown_trimmed_unknown_target_attack_payload["ok"] is False, (
+    "cooldown trimmed unknown target attack payload should be failure"
+)
+assert cooldown_trimmed_unknown_target_attack_payload["error"]["code"] == "ATTACK_COOLDOWN", (
+    "cooldown trimmed unknown target attack code mismatch: "
+    f"{cooldown_trimmed_unknown_target_attack_payload['error']['code']}"
+)
+PY
 
 python3 - <<'PY' "${join_payload}" "${servers_payload}" "${action_status}" "${shoot_status}" "${out_of_range_attack_status}" "${bad_direction_status}" "${invalid_join_field_status}" "${blank_session_status}" "${blank_server_id_status}" "${blank_player_id_status}" "${missing_direction_status}" "${invalid_attack_target_status}" "${blank_attack_target_status}" "${turret_no_scrap_status}" "${fractional_zombie_count_status}" "${invalid_json_status}" "${missing_query_status}" "${blank_state_query_status}" "${missing_state_status}" "${missing_observe_status}" "${blank_observe_player_status}" "${trimmed_observe_status}" "${observe_alias_status}" "${blank_action_session_status}" "${blank_action_player_status}" "${blank_tick_session_status}" "${unknown_action_session_status}" "${unknown_tick_session_status}" "${trimmed_action_status}" "${trimmed_tick_status}" "${trimmed_serverid_game_join_status}" "${join_server_status}" "${blank_name_join_status}" "${trimmed_session_join_status}" "${invalid_server_join_field_status}" "${blank_server_join_player_id_status}" "${missing_server_status}" "${missing_join_server_status}" "${mismatch_join_status}" "${invalid_server_description_type_status}" "${invalid_server_maxplayers_type_status}" "${duplicate_join_one_status}" "${duplicate_join_two_status}" "${out_of_range_zombie_count_status}" "${string_zombie_count_status}" "${invalid_server_maxplayers_low_status}" "${invalid_server_maxplayers_high_status}" "${invalid_server_maxplayers_fractional_status}" "${trimmed_route_server_join_status}" "${blank_route_server_join_status}" "${unknown_action_player_status}" "${unknown_target_attack_status}" "${second_shoot_status}" "${invalid_shoot_direction_status}" "${unknown_target_shoot_status}" "${target_precedence_shoot_status}" "${trimmed_target_precedence_shoot_status}" "${blank_shoot_target_status}" "${invalid_shoot_direction_with_target_status}" "${cooldown_unknown_target_shoot_status}" "${cooldown_unknown_target_attack_status}" "${trimmed_unknown_target_attack_status}" "${cooldown_trimmed_unknown_target_shoot_status}" "${trimmed_unknown_target_shoot_status}"
 import json
