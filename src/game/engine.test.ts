@@ -358,6 +358,17 @@ describe("engine", () => {
     expect(() => applyAction(afterMiss, "p-1", { type: "shoot" })).toThrow("cooldown");
   });
 
+  test("shoot miss with explicit direction updates facing", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot", direction: "up" });
+    expect(afterMiss.players["p-1"]?.facing).toBe("up");
+    expect(afterMiss.zombies["z-1"]?.hp).toBe(70);
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot" })).toThrow("cooldown");
+  });
+
   test("build turret deploys and can attack terminator robots", () => {
     const state = makeState();
     state.scrap = 200;

@@ -265,6 +265,7 @@ Response:
 
 Behavior note:
 - `shoot` fires along facing direction (or provided direction).
+- When `shoot.direction` is provided, the player's facing updates to that direction even if the shot misses.
 - If no robot target is in that lane, the action still succeeds and consumes attack cooldown.
 
 ---

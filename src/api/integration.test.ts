@@ -1254,6 +1254,35 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
   });
 
+  test("shoot action with direction updates facing even when it misses", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "DirectionShooter" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "up" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe("up");
+  });
+
   test("shoot with unknown explicit target returns 404", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

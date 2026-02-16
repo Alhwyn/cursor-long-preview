@@ -332,10 +332,15 @@ function resolvePlayerShoot(state: GameState, player: Player, action: Extract<Ac
   } else {
     const explicitDirection = action.type === "shoot" ? action.direction : undefined;
     const direction = explicitDirection ?? player.facing;
+    if (explicitDirection) {
+      player.facing = explicitDirection;
+    }
     const directionalTarget = findZombieInDirection(state, player.position, direction, player.attackRange);
     if (directionalTarget) {
       resolvedTarget = directionalTarget;
-      player.facing = direction;
+      if (!explicitDirection) {
+        player.facing = direction;
+      }
     } else if (action.type === "attack") {
       resolvedTarget = pickZombieTarget(state, player);
       player.facing = directionToward(player.position, resolvedTarget.position);
