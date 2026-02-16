@@ -1127,6 +1127,34 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("shoot action accepts optional direction and executes", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShooterUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(200);
+    expect(actionPayload.ok).toBe(true);
+  });
+
   test("out-of-range attack returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -2369,7 +2397,7 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.data.party.status).toBe("in_game");
     expect(Object.keys(startPayload.data.state.players).length).toBe(4);
     expect(startPayload.data.state.companion).toBeDefined();
-    expect(startPayload.data.state.companion.name).toBe("CAI");
+    expect(startPayload.data.state.companion.name).toBe("Claude Bot");
     expect(startPayload.data.state.mode).toBe("endless");
     expect(startPayload.data.state.wave).toBe(1);
 

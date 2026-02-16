@@ -49,7 +49,7 @@ const PLAYER_START: Vec2 = { x: 2, y: 2 };
 const PLAYER_MAX_HP = 120;
 const PLAYER_DAMAGE = 26;
 const PLAYER_ATTACK_RANGE = 8;
-const PLAYER_ATTACK_COOLDOWN = 1;
+const PLAYER_ATTACK_COOLDOWN = 2;
 const NORMAL_ZOMBIE_HP = 70;
 const NORMAL_ZOMBIE_DAMAGE = 12;
 const NORMAL_ZOMBIE_COOLDOWN = 2;
@@ -343,6 +343,10 @@ function resolvePlayerShoot(state: GameState, player: Player, action: Extract<Ac
   }
 
   if (!resolvedTarget) {
+    if (action.type === "shoot") {
+      player.lastAttackTick = state.tick;
+      return;
+    }
     throw new GameRuleError("TARGET_NOT_FOUND", "No terminator robot target found in firing line.");
   }
   const distance = manhattanDistance(player.position, resolvedTarget.position);

@@ -94,7 +94,7 @@ curl -s -X POST http://127.0.0.1:3000/api/game/action \
   }'
 ```
 
-### Build (barricade / ally robot)
+### Build (barricade / ally robot / turret)
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/game/action \
@@ -181,7 +181,7 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 - `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode (`UNAUTHORIZED` also covers missing/non-Bearer auth headers; Bearer scheme parsing is case-insensitive).
 - In enabled mode, auth validation runs before JSON body parsing on `POST /api/servers`.
 - For realtime sync, open `GET /api/realtime/stream` (SSE) after joining/creating party.
-- CAI companion appears in `state.companion` / `observation.companion` when enabled and will attack zombies autonomously.
+- Claude Bot companion appears in `state.companion` / `observation.companion` when enabled and will attack terminator robots autonomously.
 
 ## Observation-driven movement heuristic
 

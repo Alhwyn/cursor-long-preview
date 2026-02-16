@@ -1,4 +1,4 @@
-# RPC Terminator Siege Game (Bun + React)
+# RPC Terminator Robot Defense Game (Bun + React)
 
 Server-authoritative terminator survival game with:
 
@@ -6,8 +6,8 @@ Server-authoritative terminator survival game with:
 - RPC gameplay endpoints
 - 4-player party lifecycle APIs (create/join/ready/start/leave)
 - realtime SSE party/session updates
-- optional CAI combat companion agent (enabled by default for party starts)
-- scrap economy + build actions (barricades and deployable ally robots)
+- optional Claude Bot combat companion agent (enabled by default for party starts)
+- scrap economy + build actions (barricades, deployable ally robots, and turrets)
 - endless wave mode with terminator archetypes:
   - normal (ranged shooter),
   - flying (fast mobility),
@@ -15,7 +15,7 @@ Server-authoritative terminator survival game with:
   - mech (giant heavy unit)
 - in-memory session/lobby management
 - optional Supabase-backed lobby/auth mode
-- React isometric canvas client + HUD + observation panel
+- React 3D raycast shooter canvas client + HUD + observation panel
 
 ## Install
 

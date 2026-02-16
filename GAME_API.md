@@ -50,7 +50,7 @@ Request:
 ```
 
 `zombieCount` must be an integer from `1` to `32` (legacy field name; controls terminator count).
-`agentEnabled` is optional boolean (when true on new session, spawns CAI combat companion).
+`agentEnabled` is optional boolean (when true on new session, spawns Claude Bot combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
 If `accessKey` is provided, session is resolved from the key unless explicit `session` is also provided.
@@ -202,7 +202,7 @@ Observation shape:
   "companion": {
     "id": "cai-agent",
     "kind": "agent",
-    "name": "CAI",
+    "name": "Claude Bot",
     "x": 3,
     "y": 2,
     "hp": 180,
@@ -239,7 +239,8 @@ Action schema:
 
 - `{"type":"move","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"attack","targetId":"optional-terminator-id"}` (`targetId` must be non-empty when provided)
-- `{"type":"build","buildType":"barricade"|"ally_robot","direction":"up"|"down"|"left"|"right"}`
+- `{"type":"shoot","direction":"optional-up|down|left|right","targetId":"optional-terminator-id"}`
+- `{"type":"build","buildType":"barricade"|"ally_robot"|"turret","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"wait"}`
 
 `session` and `playerId` are required non-empty strings and are trimmed before lookup.
@@ -481,7 +482,7 @@ Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.
 - `409 PARTY_NOT_READY` when not all members are ready.
 - `200` with `sessionId` + full starting `state` on success.
-- `agentEnabled` defaults to `true` for party starts, so CAI companion joins unless explicitly disabled.
+- `agentEnabled` defaults to `true` for party starts, so Claude Bot companion joins unless explicitly disabled.
 
 ---
 
@@ -541,11 +542,12 @@ Use this stream for party/lobby sync and in-match state push updates.
 ## Claude / Agent Play Loop (single session)
 
 1. `POST /api/game/join` → keep `sessionId` + `playerId`.
-2. `GET /api/game/observe?session=...&player=...` → inspect nearest zombie + HP.
+2. `GET /api/game/observe?session=...&player=...` → inspect nearest terminator robot + HP.
 3. Decide action:
-   - if zombie adjacent => `attack`
+   - if robot adjacent => `attack`
+   - if robot is in front lane => `shoot`
    - else move to reduce distance.
-   - if enough `scrap`, optionally `build` barricades or ally robots.
+   - if enough `scrap`, optionally `build` barricades, ally robots, or turrets.
 4. `POST /api/game/action`.
 5. Repeat 2–4 until `status` is `won` or `lost`.
 

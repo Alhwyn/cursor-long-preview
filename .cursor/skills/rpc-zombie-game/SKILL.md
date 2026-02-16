@@ -5,7 +5,7 @@ Use this skill when an agent needs to play or test the RPC terminator-siege game
 ## Goal
 
 Drive the server-authoritative simulation through API actions without direct state mutation.
-Leverage CAI companion support when enabled (combat-capable in-session agent ally).
+Leverage Claude Bot companion support when enabled (combat-capable in-session agent ally).
 
 ## Preconditions
 
@@ -80,7 +80,7 @@ Default behavior:
 5. Leader starts match:
    - `POST /api/party/start`
 6. Play through `/api/game/action`; consume `session_state` events from SSE.
-7. Expect CAI companion in state/observation when `agentEnabled` is true (default for party starts).
+7. Expect Claude Bot companion in state/observation when `agentEnabled` is true (default for party starts).
 8. For external agents, share the returned `sessionId` from `/api/party/start`, then each agent joins with `POST /api/game/join` using that `session`.
 
 ### Important session/server constraints

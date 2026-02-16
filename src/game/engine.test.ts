@@ -47,7 +47,7 @@ describe("engine", () => {
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
 
     const afterAttack = applyAction(state, "p-1", { type: "attack" });
-    expect(afterAttack.zombies["z-1"]?.hp).toBe(42);
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
     expect(afterAttack.tick).toBe(1);
 
     expect(() => applyAction(afterAttack, "p-1", { type: "attack" })).toThrow("cooldown");
@@ -57,7 +57,7 @@ describe("engine", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 12, y: 12 };
 
-    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of attack range");
+    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of weapon range");
   });
 
   test("build barricade spends scrap and converts tile to wall", () => {
@@ -248,10 +248,10 @@ describe("engine", () => {
     expect(() => tickGame(state)).toThrow("already completed");
   });
 
-  test("agent-enabled state includes CAI companion and observation data", () => {
+  test("agent-enabled state includes Claude Bot companion and observation data", () => {
     const state = makeStateWithAgent();
     expect(state.companion).toBeDefined();
-    expect(state.companion?.name).toBe("CAI");
+    expect(state.companion?.name).toBe("Claude Bot");
 
     const observation = toObservation(state, "p-1");
     expect(observation.companion).toBeDefined();
@@ -327,5 +327,43 @@ describe("engine", () => {
     expect(next.status).toBe("active");
     expect(next.wave).toBeGreaterThan(1);
     expect(Object.values(next.zombies).some(zombie => zombie.alive)).toBe(true);
+  });
+
+  test("shoot action hits terminator robot in facing direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+  });
+
+  test("build turret deploys and can attack terminator robots", () => {
+    const state = makeState();
+    state.scrap = 200;
+    state.zombies["z-1"]!.position = { x: 7, y: 2 };
+
+    const afterBuild = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "turret",
+      direction: "right",
+    });
+    const turret = Object.values(afterBuild.turrets)[0];
+    expect(turret).toBeDefined();
+    expect(afterBuild.scrap).toBe(140);
+    expect(afterBuild.zombies["z-1"]?.hp).toBeLessThan(70);
+  });
+
+  test("observation includes terminator alias and turrets", () => {
+    const state = makeState();
+    state.scrap = 200;
+    const built = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "turret",
+      direction: "right",
+    });
+    const observation = toObservation(built, "p-1");
+    expect(observation.terminators).toHaveLength(observation.zombies.length);
+    expect(observation.turrets.length).toBeGreaterThanOrEqual(1);
   });
 });
