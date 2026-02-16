@@ -81,6 +81,7 @@ matching_out_of_range_count_aliases_start_status="$(curl -sS -o /tmp/rpc-zombie-
 matching_low_count_aliases_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-matching-low-count-aliases-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":0,\"terminatorCount\":0}")"
 matching_negative_count_aliases_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-matching-negative-count-aliases-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":-1,\"terminatorCount\":-1}")"
 matching_fractional_count_aliases_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-matching-fractional-count-aliases-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":1.5,\"terminatorCount\":1.5}")"
+matching_invalid_type_count_aliases_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-matching-invalid-type-count-aliases-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":\"2\",\"terminatorCount\":\"2\"}")"
 start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":2}")"
 session_id="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())["data"]["sessionId"])')"
 agent_key_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-key.json -w "%{http_code}" -X POST "${BASE_URL}/api/agent/access-key" -H "Content-Type: application/json" -d "{\"session\":\"${session_id}\",\"playerId\":\"${leader_player_id}\"}")"
@@ -464,7 +465,7 @@ assert matching_out_of_range_count_aliases_start_payload["error"]["code"] == "IN
 )
 PY
 
-python3 - <<'PY' "${matching_low_count_aliases_start_status}" "${matching_negative_count_aliases_start_status}" "${matching_fractional_count_aliases_start_status}"
+python3 - <<'PY' "${matching_low_count_aliases_start_status}" "${matching_negative_count_aliases_start_status}" "${matching_fractional_count_aliases_start_status}" "${matching_invalid_type_count_aliases_start_status}"
 import json
 import pathlib
 import sys
@@ -472,6 +473,7 @@ import sys
 matching_low_count_aliases_start_status = int(sys.argv[1])
 matching_negative_count_aliases_start_status = int(sys.argv[2])
 matching_fractional_count_aliases_start_status = int(sys.argv[3])
+matching_invalid_type_count_aliases_start_status = int(sys.argv[4])
 matching_low_count_aliases_start_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-party-matching-low-count-aliases-start.json").read_text()
 )
@@ -480,6 +482,9 @@ matching_negative_count_aliases_start_payload = json.loads(
 )
 matching_fractional_count_aliases_start_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-party-matching-fractional-count-aliases-start.json").read_text()
+)
+matching_invalid_type_count_aliases_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-matching-invalid-type-count-aliases-start.json").read_text()
 )
 
 assert matching_low_count_aliases_start_status == 400, (
@@ -514,6 +519,17 @@ assert matching_fractional_count_aliases_start_payload["ok"] is False, (
 assert matching_fractional_count_aliases_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
     "unexpected matching fractional count aliases start code: "
     f"{matching_fractional_count_aliases_start_payload['error']['code']}"
+)
+assert matching_invalid_type_count_aliases_start_status == 400, (
+    "party start with matching non-number zombieCount and terminatorCount should be 400, "
+    f"got {matching_invalid_type_count_aliases_start_status}"
+)
+assert matching_invalid_type_count_aliases_start_payload["ok"] is False, (
+    "matching invalid-type count aliases start payload should fail"
+)
+assert matching_invalid_type_count_aliases_start_payload["error"]["code"] == "INVALID_FIELD", (
+    "unexpected matching invalid-type count aliases start code: "
+    f"{matching_invalid_type_count_aliases_start_payload['error']['code']}"
 )
 PY
 

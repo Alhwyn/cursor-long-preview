@@ -57,6 +57,7 @@ Count field validation errors:
 - `400 INVALID_FIELD` for non-numeric values (including `null`) for either field (whether provided alone or alongside the other alias), or dual-field mismatches.
 - Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
 - When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
+- Matching dual-field non-numeric requests (for example `"4"/"4"`) also return `400 INVALID_FIELD`.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 - Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:
@@ -530,6 +531,7 @@ Count field validation errors:
 - `400 INVALID_FIELD` for non-numeric values (including `null`) for either field (whether provided alone or alongside the other alias), or dual-field mismatches.
 - Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
 - When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
+- Matching dual-field non-numeric requests (for example `"2"/"2"`) also return `400 INVALID_FIELD`.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 - Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
 Boundary behavior:

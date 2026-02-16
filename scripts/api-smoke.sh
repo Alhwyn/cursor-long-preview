@@ -124,6 +124,9 @@ matching_negative_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matc
 matching_fractional_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matching-fractional-count-aliases-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"MatchingFractionalCountAliasesSmoke","zombieCount":1.5,"terminatorCount":1.5}')"
+matching_invalid_type_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matching-invalid-type-count-aliases-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"MatchingInvalidTypeCountAliasesSmoke","zombieCount":"4","terminatorCount":"4"}')"
 string_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-string-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"StringTerminatorCountSmoke","terminatorCount":"4"}')"
@@ -838,7 +841,7 @@ assert matching_out_of_range_count_aliases_payload["error"]["code"] == "INVALID_
 )
 PY
 
-python3 - <<'PY' "${matching_low_count_aliases_status}" "${matching_negative_count_aliases_status}" "${matching_fractional_count_aliases_status}"
+python3 - <<'PY' "${matching_low_count_aliases_status}" "${matching_negative_count_aliases_status}" "${matching_fractional_count_aliases_status}" "${matching_invalid_type_count_aliases_status}"
 import json
 import pathlib
 import sys
@@ -846,6 +849,7 @@ import sys
 matching_low_count_aliases_status = int(sys.argv[1])
 matching_negative_count_aliases_status = int(sys.argv[2])
 matching_fractional_count_aliases_status = int(sys.argv[3])
+matching_invalid_type_count_aliases_status = int(sys.argv[4])
 matching_low_count_aliases_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-matching-low-count-aliases-join.json").read_text()
 )
@@ -854,6 +858,9 @@ matching_negative_count_aliases_payload = json.loads(
 )
 matching_fractional_count_aliases_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-matching-fractional-count-aliases-join.json").read_text()
+)
+matching_invalid_type_count_aliases_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-matching-invalid-type-count-aliases-join.json").read_text()
 )
 
 assert matching_low_count_aliases_status == 400, (
@@ -888,6 +895,17 @@ assert matching_fractional_count_aliases_payload["ok"] is False, (
 assert matching_fractional_count_aliases_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
     "matching fractional count aliases join code mismatch: "
     f"{matching_fractional_count_aliases_payload['error']['code']}"
+)
+assert matching_invalid_type_count_aliases_status == 400, (
+    "matching non-number zombieCount and terminatorCount join should be 400, "
+    f"got {matching_invalid_type_count_aliases_status}"
+)
+assert matching_invalid_type_count_aliases_payload["ok"] is False, (
+    "matching invalid-type count aliases join payload should fail"
+)
+assert matching_invalid_type_count_aliases_payload["error"]["code"] == "INVALID_FIELD", (
+    "matching invalid-type count aliases join code mismatch: "
+    f"{matching_invalid_type_count_aliases_payload['error']['code']}"
 )
 PY
 
