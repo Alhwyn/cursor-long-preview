@@ -57,6 +57,26 @@ async function stopServer(server: RunningServer | null): Promise<void> {
   await server.process.exited;
 }
 
+function directionTowardDelta(dx: number, dy: number): Direction {
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? "right" : "left";
+  }
+  return dy >= 0 ? "down" : "up";
+}
+
+function secondaryDirectionTowardDelta(dx: number, dy: number, primaryDirection: Direction): Direction | null {
+  if (primaryDirection === "left" || primaryDirection === "right") {
+    if (dy === 0) {
+      return null;
+    }
+    return dy > 0 ? "down" : "up";
+  }
+  if (dx === 0) {
+    return null;
+  }
+  return dx > 0 ? "right" : "left";
+}
+
 describe("RPC API integration (fallback mode)", () => {
   let server: RunningServer | null = null;
 
@@ -1397,14 +1417,7 @@ describe("RPC API integration (fallback mode)", () => {
         break;
       }
 
-      const primaryDirection: Direction =
-        Math.abs(nearestZombie.dx) >= Math.abs(nearestZombie.dy)
-          ? nearestZombie.dx > 0
-            ? "right"
-            : "left"
-          : nearestZombie.dy > 0
-            ? "down"
-            : "up";
+      const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
       const moveResponse = await fetch(`${baseUrl}/api/game/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1444,14 +1457,7 @@ describe("RPC API integration (fallback mode)", () => {
       | { id: string; dx: number; dy: number }
       | undefined;
     expect(nearestZombie).toBeDefined();
-    const expectedFacing: Direction =
-      Math.abs(nearestZombie!.dx) >= Math.abs(nearestZombie!.dy)
-        ? nearestZombie!.dx >= 0
-          ? "right"
-          : "left"
-        : nearestZombie!.dy >= 0
-          ? "down"
-          : "up";
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
     const oppositeDirection: Direction =
       expectedFacing === "left"
         ? "right"
@@ -1648,26 +1654,12 @@ describe("RPC API integration (fallback mode)", () => {
         break;
       }
 
-      const primaryDirection: Direction =
-        Math.abs(nearestZombie.dx) >= Math.abs(nearestZombie.dy)
-          ? nearestZombie.dx > 0
-            ? "right"
-            : "left"
-          : nearestZombie.dy > 0
-            ? "down"
-            : "up";
-      const secondaryDirection: Direction | null =
-        primaryDirection === "left" || primaryDirection === "right"
-          ? nearestZombie.dy === 0
-            ? null
-            : nearestZombie.dy > 0
-              ? "down"
-              : "up"
-          : nearestZombie.dx === 0
-            ? null
-            : nearestZombie.dx > 0
-              ? "right"
-              : "left";
+      const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
+      const secondaryDirection = secondaryDirectionTowardDelta(
+        nearestZombie.dx,
+        nearestZombie.dy,
+        primaryDirection,
+      );
 
       const tryMove = async (direction: Direction) => {
         const response = await fetch(`${baseUrl}/api/game/action`, {
@@ -1720,14 +1712,7 @@ describe("RPC API integration (fallback mode)", () => {
     expect(nearestZombie).toBeDefined();
     const nearestZombieId = preAttackObservePayload.data.observation.nearestZombie?.id as string | undefined;
     expect(nearestZombieId).toBeTruthy();
-    const expectedFacing: Direction =
-      Math.abs(nearestZombie!.dx) >= Math.abs(nearestZombie!.dy)
-        ? nearestZombie!.dx >= 0
-          ? "right"
-          : "left"
-        : nearestZombie!.dy >= 0
-          ? "down"
-          : "up";
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
 
     const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
       method: "POST",
