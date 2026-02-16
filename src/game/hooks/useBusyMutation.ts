@@ -8,8 +8,9 @@ export interface BusyMutationController {
 }
 
 export function useBusyMutation(): BusyMutationController {
-  const [busy, setBusy] = useState<boolean>(false);
+  const [pendingMutationCount, setPendingMutationCount] = useState<number>(0);
   const [error, setError] = useState<string>("");
+  const busy = pendingMutationCount > 0;
 
   const setErrorMessage = useCallback((message: string) => {
     setError(message);
@@ -17,7 +18,7 @@ export function useBusyMutation(): BusyMutationController {
 
   const runBusyMutation = useCallback(
     async (task: () => Promise<void>, onError?: (errorMessage: string) => void) => {
-      setBusy(true);
+      setPendingMutationCount(previous => previous + 1);
       setError("");
       try {
         await task();
@@ -26,7 +27,7 @@ export function useBusyMutation(): BusyMutationController {
         setError(errorMessage);
         onError?.(errorMessage);
       } finally {
-        setBusy(false);
+        setPendingMutationCount(previous => Math.max(0, previous - 1));
       }
     },
     [],
