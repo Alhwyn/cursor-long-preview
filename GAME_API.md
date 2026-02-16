@@ -54,7 +54,7 @@ Request:
 If both `terminatorCount` and `zombieCount` are provided, they must match.
 When both are sent, each field is validated independently (type + integer range checks); an invalid value in either field is rejected.
 Count field validation errors:
-- `400 INVALID_FIELD` for non-numeric values (for either field) or dual-field mismatches.
+- `400 INVALID_FIELD` for non-numeric values (including `null`) for either field, or dual-field mismatches.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.
@@ -524,7 +524,7 @@ Request:
 Both fields, when provided, must be integers from `1` to `32`.
 If both are sent, each field is validated independently (type + integer range checks) before matching is enforced.
 Count field validation errors:
-- `400 INVALID_FIELD` for non-numeric values (for either field) or dual-field mismatches.
+- `400 INVALID_FIELD` for non-numeric values (including `null`) for either field, or dual-field mismatches.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
 Boundary behavior:
 - `terminatorCount` accepts `1` and `32`.

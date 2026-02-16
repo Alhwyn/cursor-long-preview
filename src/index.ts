@@ -223,6 +223,13 @@ function parseGameMode(value: unknown): "classic" | "endless" | undefined {
 }
 
 function parseTerminatorCount(body: Record<string, unknown>): number | undefined {
+  if (Object.prototype.hasOwnProperty.call(body, "zombieCount") && body.zombieCount === null) {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "zombieCount" must be a finite number when provided.');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "terminatorCount") && body.terminatorCount === null) {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "terminatorCount" must be a finite number when provided.');
+  }
+
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
   const terminatorCount = optionalNumber(body.terminatorCount, "terminatorCount");
   const validateCount = (value: number | undefined, fieldName: "zombieCount" | "terminatorCount"): void => {
