@@ -378,6 +378,22 @@ describe("engine", () => {
     );
   });
 
+  test("shoot with destroyed explicit target is rejected", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-destroyed-target",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-1" })).toThrow(
+      "does not exist or is already destroyed",
+    );
+  });
+
   test("shoot with explicit target out of range is rejected", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 12, y: 2 };
