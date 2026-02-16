@@ -750,6 +750,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(Object.keys(payload.data.state.zombies).length).toBe(2);
   });
 
+  test("legacy zombieCount alias is accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LegacyZombieCountJoin",
+        zombieCount: 2,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(Object.keys(payload.data.state.zombies).length).toBe(2);
+  });
+
   test("matching zombieCount and terminatorCount is accepted", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
