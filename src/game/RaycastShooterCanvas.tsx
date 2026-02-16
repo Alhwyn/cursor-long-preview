@@ -55,7 +55,7 @@ function lineOfSightDistance(state: GameState, from: Vec2, angle: number): numbe
   return MAX_VIEW_DEPTH;
 }
 
-function colorForEntity(kind: "player" | "zombie" | "agent" | "turret", zombieType?: string): string {
+function colorForEntity(kind: "player" | "terminator" | "agent" | "turret", terminatorType?: string): string {
   if (kind === "player") {
     return "#67e8f9";
   }
@@ -65,13 +65,13 @@ function colorForEntity(kind: "player" | "zombie" | "agent" | "turret", zombieTy
   if (kind === "turret") {
     return "#f9a8d4";
   }
-  if (zombieType === "mech") {
+  if (terminatorType === "mech") {
     return "#ef4444";
   }
-  if (zombieType === "explosive") {
+  if (terminatorType === "explosive") {
     return "#fb923c";
   }
-  if (zombieType === "flying") {
+  if (terminatorType === "flying") {
     return "#facc15";
   }
   return "#f87171";
@@ -105,14 +105,14 @@ export function RaycastShooterCanvas({ state, focusPlayerId, width = 980, height
         .filter(player => player.id !== playerId && player.alive)
         .map(player => ({ kind: "player" as const, id: player.id, x: player.position.x + 0.5, y: player.position.y + 0.5, hp: player.hp })),
       ...Object.values(state.zombies)
-        .filter(robot => robot.alive)
-        .map(robot => ({
-          kind: "zombie" as const,
-          id: robot.id,
-          zombieType: robot.zombieType,
-          x: robot.position.x + 0.5,
-          y: robot.position.y + 0.5,
-          hp: robot.hp,
+        .filter(terminator => terminator.alive)
+        .map(terminator => ({
+          kind: "terminator" as const,
+          id: terminator.id,
+          terminatorType: terminator.zombieType,
+          x: terminator.position.x + 0.5,
+          y: terminator.position.y + 0.5,
+          hp: terminator.hp,
         })),
       ...Object.values(state.builtRobots)
         .filter(robot => robot.alive)
@@ -200,7 +200,7 @@ export function RaycastShooterCanvas({ state, focusPlayerId, width = 980, height
         continue;
       }
 
-      ctx.fillStyle = colorForEntity(sprite.kind, "zombieType" in sprite ? sprite.zombieType : undefined);
+      ctx.fillStyle = colorForEntity(sprite.kind, "terminatorType" in sprite ? sprite.terminatorType : undefined);
       ctx.fillRect(left, top, spriteWidth, spriteHeight);
       ctx.fillStyle = "#0f172a";
       ctx.fillRect(left + 2, top + 5, Math.max(2, spriteWidth - 4), 2);
