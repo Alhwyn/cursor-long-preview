@@ -13,6 +13,7 @@ import {
   type ServersResponse,
   type SessionStateResponse,
 } from "../api";
+import type { RealtimeStatus } from "../realtimeStatus";
 import type { Action, GameState, Observation } from "../types";
 import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
 import { useSessionPolling } from "./useSessionPolling";
@@ -32,7 +33,7 @@ export interface GameViewController {
   observation: Observation | null;
   error: string;
   systemFeed: string[];
-  realtimeStatus: "offline" | "connecting" | "live" | "degraded";
+  realtimeStatus: RealtimeStatus;
   servers: LobbyServer[];
   supabaseMode: "enabled" | "disabled";
   serverName: string;

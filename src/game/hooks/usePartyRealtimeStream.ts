@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { PartySnapshot, RealtimeEnvelope } from "../api";
+import type { RealtimeStatus } from "../realtimeStatus";
 import type { GameState } from "../types";
-
-export type RealtimeStatus = "offline" | "connecting" | "live" | "degraded";
+export type { RealtimeStatus } from "../realtimeStatus";
 
 export interface UsePartyRealtimeStreamOptions {
   party: PartySnapshot | null;

@@ -1,4 +1,5 @@
 import type { PartySnapshot } from "../api";
+import type { RealtimeStatus } from "../realtimeStatus";
 
 interface PartyLobbyPanelProps {
   busy: boolean;
@@ -8,7 +9,7 @@ interface PartyLobbyPanelProps {
   onPartyCodeInputChange: (next: string) => void;
   party: PartySnapshot | null;
   playerId: string;
-  realtimeStatus: "offline" | "connecting" | "live" | "degraded";
+  realtimeStatus: RealtimeStatus;
   selfReady?: boolean;
   canStartParty: boolean;
   onCreateParty: () => void;
