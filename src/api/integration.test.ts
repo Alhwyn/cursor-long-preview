@@ -921,6 +921,34 @@ describe("RPC API integration (fallback mode)", () => {
     expect(tickPayload.error.code).toBe("SESSION_NOT_FOUND");
   });
 
+  test("action with unknown player in known session returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "KnownSessionActor" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId: "ghost-player",
+        action: { type: "wait" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(404);
+    expect(actionPayload.ok).toBe(false);
+    expect(actionPayload.error.code).toBe("PLAYER_NOT_FOUND");
+  });
+
   test("observe without session query returns 400", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
