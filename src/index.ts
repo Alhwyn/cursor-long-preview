@@ -222,6 +222,19 @@ function parseGameMode(value: unknown): "classic" | "endless" | undefined {
   return mode as "classic" | "endless";
 }
 
+function parseTerminatorCount(body: Record<string, unknown>): number | undefined {
+  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const terminatorCount = optionalNumber(body.terminatorCount, "terminatorCount");
+  if (zombieCount !== undefined && terminatorCount !== undefined && zombieCount !== terminatorCount) {
+    throw new HttpError(
+      400,
+      "INVALID_FIELD",
+      'Fields "zombieCount" and "terminatorCount" must match when both are provided.',
+    );
+  }
+  return terminatorCount ?? zombieCount;
+}
+
 async function createOrJoinGameSession(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
@@ -230,7 +243,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
   const playerName = optionalString(body.playerName, "playerName");
   const serverId = optionalNonEmptyString(body.serverId, "serverId");
   const accessKey = optionalNonEmptyString(body.accessKey, "accessKey");
-  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const zombieCount = parseTerminatorCount(body);
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled");
   const gameMode = parseGameMode(body.gameMode);
 
@@ -660,7 +673,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
   const body = requireObject(rawBody);
   const partyId = requireString(body.partyId, "partyId");
   const playerId = requireString(body.playerId, "playerId");
-  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const zombieCount = parseTerminatorCount(body);
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled") ?? true;
   const gameMode = parseGameMode(body.gameMode) ?? "endless";
 

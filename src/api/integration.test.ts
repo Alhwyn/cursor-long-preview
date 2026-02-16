@@ -662,6 +662,45 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("terminatorCount alias is accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountJoin",
+        terminatorCount: 2,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(Object.keys(payload.data.state.zombies).length).toBe(2);
+  });
+
+  test("mismatched zombieCount and terminatorCount is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MismatchedCountsJoin",
+        zombieCount: 2,
+        terminatorCount: 3,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("move blocked by map wall returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3397,6 +3436,97 @@ describe("RPC API integration (fallback mode)", () => {
     expect(statePayload.data.party.sessionId).toBe(startPayload.data.sessionId);
     expect(Object.keys(statePayload.data.state.players).length).toBe(4);
     expect(statePayload.data.state.companion).toBeDefined();
+  });
+
+  test("party start accepts terminatorCount alias", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createPartyResponse = await fetch(`${baseUrl}/api/party/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "AliasLeader" }),
+    });
+    const createPartyPayload = await createPartyResponse.json();
+    expect(createPartyResponse.status).toBe(201);
+    expect(createPartyPayload.ok).toBe(true);
+
+    const partyId = createPartyPayload.data.party.partyId as string;
+    const leaderPlayerId = createPartyPayload.data.player.playerId as string;
+
+    const readyResponse = await fetch(`${baseUrl}/api/party/ready`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        ready: true,
+      }),
+    });
+    const readyPayload = await readyResponse.json();
+    expect(readyResponse.status).toBe(200);
+    expect(readyPayload.ok).toBe(true);
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: 2,
+        agentEnabled: false,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(Object.keys(startPayload.data.state.zombies).length).toBe(2);
+    expect(startPayload.data.state.companion).toBeUndefined();
+  });
+
+  test("party start rejects mismatched zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createPartyResponse = await fetch(`${baseUrl}/api/party/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "AliasMismatchLeader" }),
+    });
+    const createPartyPayload = await createPartyResponse.json();
+    expect(createPartyResponse.status).toBe(201);
+    expect(createPartyPayload.ok).toBe(true);
+
+    const partyId = createPartyPayload.data.party.partyId as string;
+    const leaderPlayerId = createPartyPayload.data.player.playerId as string;
+
+    const readyResponse = await fetch(`${baseUrl}/api/party/ready`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        ready: true,
+      }),
+    });
+    const readyPayload = await readyResponse.json();
+    expect(readyResponse.status).toBe(200);
+    expect(readyPayload.ok).toBe(true);
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 3,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("party leave transfers leader and cleans up empty party", async () => {

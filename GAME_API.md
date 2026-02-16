@@ -44,12 +44,14 @@ Request:
   "accessKey": "optional-temporary-agent-access-key",
   "playerId": "optional-player-id",
   "serverId": "optional-server-id",
-  "zombieCount": 4,
+  "terminatorCount": 4,
   "agentEnabled": true
 }
 ```
 
-`zombieCount` must be an integer from `1` to `32` (legacy field name; controls terminator count).
+`terminatorCount` must be an integer from `1` to `32`.
+`zombieCount` remains a legacy alias for backward compatibility.
+If both `terminatorCount` and `zombieCount` are provided, they must match.
 `agentEnabled` is optional boolean (when true on new session, spawns Claude Bot combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
@@ -491,10 +493,13 @@ Request:
 {
   "partyId": "party-...",
   "playerId": "party-player-1",
-  "zombieCount": 6,
+  "terminatorCount": 6,
   "agentEnabled": true
 }
 ```
+
+`terminatorCount` is the preferred spawn-count field for party starts.
+`zombieCount` remains a legacy alias; when both are provided they must match.
 
 Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.

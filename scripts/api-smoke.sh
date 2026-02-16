@@ -7,6 +7,12 @@ BASE_URL="${1:-http://127.0.0.1:3000}"
 join_payload="$(curl -sS -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d '{"playerName":"SmokeRunner"}')"
 session_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["sessionId"])' <<< "${join_payload}")"
 player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["playerId"])' <<< "${join_payload}")"
+terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"TerminatorCountSmoke","terminatorCount":2}')"
+mismatched_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-mismatched-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"MismatchedCountsSmoke","zombieCount":2,"terminatorCount":3}')"
 
 action_status="$(curl -sS -o /tmp/rpc-zombie-smoke-action.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
@@ -164,6 +170,34 @@ duplicate_server_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["
 duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-one.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeA"}')"
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
+
+python3 - <<'PY' "${terminator_count_join_status}" "${mismatched_count_join_status}"
+import json
+import pathlib
+import sys
+
+terminator_count_join_status = int(sys.argv[1])
+mismatched_count_join_status = int(sys.argv[2])
+terminator_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-terminator-count-join.json").read_text())
+mismatched_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-mismatched-count-join.json").read_text())
+
+assert terminator_count_join_status == 201, (
+    f"terminatorCount join should be 201, got {terminator_count_join_status}"
+)
+assert terminator_count_join_payload["ok"] is True, "terminatorCount join payload should be success"
+assert len(terminator_count_join_payload["data"]["state"]["zombies"]) == 2, (
+    "terminatorCount join should initialize exactly 2 terminators"
+)
+
+assert mismatched_count_join_status == 400, (
+    f"mismatched zombieCount/terminatorCount should be 400, got {mismatched_count_join_status}"
+)
+assert mismatched_count_join_payload["ok"] is False, "mismatched count join payload should be failure"
+assert mismatched_count_join_payload["error"]["code"] == "INVALID_FIELD", (
+    "mismatched count join code mismatch: "
+    f"{mismatched_count_join_payload['error']['code']}"
+)
+PY
 
 python3 - <<'PY' "${mixed_whitespace_unknown_target_attack_status}" "${mixed_whitespace_unknown_target_shoot_status}"
 import json
