@@ -3,6 +3,7 @@ import type { GameState, ObservationEntity } from "./types";
 
 interface IsometricCanvasProps {
   state: GameState | null;
+  focusPlayerId?: string;
   width?: number;
   height?: number;
 }
@@ -128,7 +129,7 @@ function drawEntity(
   ctx.restore();
 }
 
-export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricCanvasProps) {
+export function IsometricCanvas({ state, focusPlayerId, width = 920, height = 560 }: IsometricCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const entities = useMemo(() => {
@@ -163,9 +164,42 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
     });
   }, [state]);
 
+  const focusedPosition = useMemo(() => {
+    if (!state) {
+      return null;
+    }
+
+    const focusedPlayer = focusPlayerId ? state.players[focusPlayerId] : undefined;
+    if (focusedPlayer?.alive) {
+      return focusedPlayer.position;
+    }
+
+    const firstAlivePlayer = Object.values(state.players)
+      .filter(player => player.alive)
+      .sort((left, right) => left.id.localeCompare(right.id))[0];
+    if (firstAlivePlayer) {
+      return firstAlivePlayer.position;
+    }
+
+    return {
+      x: Math.floor(state.map.width / 2),
+      y: Math.floor(state.map.height / 2),
+    };
+  }, [focusPlayerId, state]);
+
+  const canvasSize = useMemo(() => {
+    if (!state) {
+      return { width, height };
+    }
+    return {
+      width: Math.max(width, Math.ceil((state.map.width + state.map.height) * (TILE_WIDTH / 2) + 320)),
+      height: Math.max(height, Math.ceil((state.map.width + state.map.height) * (TILE_HEIGHT / 2) + 280)),
+    };
+  }, [height, state, width]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !state) {
+    if (!canvas || !state || !focusedPosition) {
       return;
     }
 
@@ -175,21 +209,23 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
     }
 
     ctx.imageSmoothingEnabled = false;
-    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    const sky = ctx.createLinearGradient(0, 0, 0, canvasSize.height);
     sky.addColorStop(0, "#0b1220");
     sky.addColorStop(1, "#040814");
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
     ctx.globalAlpha = 0.1;
-    for (let line = 0; line < height; line += 4) {
+    for (let line = 0; line < canvasSize.height; line += 4) {
       ctx.fillStyle = line % 8 === 0 ? "#0f172a" : "#111827";
-      ctx.fillRect(0, line, width, 1);
+      ctx.fillRect(0, line, canvasSize.width, 1);
     }
     ctx.globalAlpha = 1;
 
-    const originX = width / 2;
-    const originY = 112;
+    const focusIsoX = (focusedPosition.x - focusedPosition.y) * (TILE_WIDTH / 2);
+    const focusIsoY = (focusedPosition.x + focusedPosition.y) * (TILE_HEIGHT / 2);
+    const originX = canvasSize.width / 2 - focusIsoX;
+    const originY = canvasSize.height / 2 - focusIsoY - 10;
 
     for (const tile of state.map.tiles) {
       const { sx, sy } = toScreen(tile.x, tile.y, originX, originY);
@@ -221,16 +257,16 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
         !entity.alive,
       );
     }
-  }, [entities, height, state, width]);
+  }, [canvasSize.height, canvasSize.width, entities, focusedPosition, state]);
 
   return (
-    <div className="rounded-xl border border-emerald-400/20 bg-slate-950 p-2 overflow-auto shadow-[0_0_45px_rgba(16,185,129,0.08)]">
+    <div className="rounded-xl border border-emerald-400/20 bg-slate-950 p-2 overflow-auto max-h-[72vh] shadow-[0_0_45px_rgba(16,185,129,0.08)]">
       {!state ? (
         <div className="h-[520px] w-full min-w-[820px] flex items-center justify-center text-slate-400">
           Join a session to render the world.
         </div>
       ) : (
-        <canvas ref={canvasRef} width={width} height={height} className="min-w-[820px] rounded-lg bg-slate-900" />
+        <canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} className="rounded-lg bg-slate-900" />
       )}
     </div>
   );

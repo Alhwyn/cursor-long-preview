@@ -1286,8 +1286,20 @@ describe("RPC API integration (fallback mode)", () => {
       ) {
         moveAttempt = await tryMove(secondaryDirection);
       }
-      expect(moveAttempt.response.status).toBe(200);
-      expect(moveAttempt.payload.ok).toBe(true);
+      if (moveAttempt.response.status === 200) {
+        expect(moveAttempt.payload.ok).toBe(true);
+      } else {
+        expect(moveAttempt.response.status).toBe(409);
+        expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(moveAttempt.payload.error.code);
+        const progressTick = await fetch(`${baseUrl}/api/game/tick`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session: sessionId }),
+        });
+        const progressPayload = await progressTick.json();
+        expect(progressTick.status).toBe(200);
+        expect(progressPayload.ok).toBe(true);
+      }
     }
 
     expect(inRange).toBe(true);

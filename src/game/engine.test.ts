@@ -188,9 +188,13 @@ describe("engine", () => {
     const right = createInitialMap();
 
     expect(left).toEqual(right);
+    expect(left.width).toBe(36);
+    expect(left.height).toBe(36);
     expect(left.tiles.find(tile => tile.x === 0 && tile.y === 0)?.type).toBe("wall");
     expect(left.tiles.find(tile => tile.x === left.width - 1 && tile.y === left.height - 1)?.type).toBe("wall");
     expect(left.tiles.find(tile => tile.x === 1 && tile.y === 1)?.type).toBe("grass");
+    expect(left.tiles.find(tile => tile.x === 18 && tile.y === 12)?.type).toBe("grass");
+    expect(left.tiles.find(tile => tile.x === 7 && tile.y === 6)?.type).toBe("wall");
   });
 
   test("tick is rejected after game completion", () => {

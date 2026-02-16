@@ -41,8 +41,8 @@ interface AddPlayerInput {
   playerName?: string;
 }
 
-const MAP_WIDTH = 20;
-const MAP_HEIGHT = 20;
+const MAP_WIDTH = 36;
+const MAP_HEIGHT = 36;
 const PLAYER_START: Vec2 = { x: 2, y: 2 };
 const PLAYER_MAX_HP = 120;
 const PLAYER_DAMAGE = 28;
@@ -69,12 +69,17 @@ const AGENT_DAMAGE = 22;
 const AGENT_ATTACK_RANGE = 1;
 const AGENT_ATTACK_COOLDOWN = 1;
 const AGENT_START: Vec2 = { x: 3, y: 2 };
-const DEFAULT_ZOMBIE_POSITIONS: Vec2[] = [
-  { x: 16, y: 16 },
-  { x: 16, y: 3 },
-  { x: 3, y: 16 },
-  { x: 12, y: 12 },
-];
+function defaultTerminatorPositions(width: number, height: number): Vec2[] {
+  const midX = Math.floor(width / 2);
+  const midY = Math.floor(height / 2);
+  return [
+    { x: width - 4, y: height - 4 },
+    { x: width - 4, y: 3 },
+    { x: 3, y: height - 4 },
+    { x: Math.min(width - 4, midX + 6), y: Math.min(height - 4, midY + 6) },
+    { x: Math.max(3, midX - 5), y: Math.max(3, midY - 6) },
+  ];
+}
 
 function nextStateTimestamp(previous: number): number {
   return previous + 1;
@@ -108,11 +113,21 @@ function manhattanDistance(a: Vec2, b: Vec2): number {
 
 export function createInitialMap(width = MAP_WIDTH, height = MAP_HEIGHT): GameMap {
   const tiles: MapTile[] = [];
+  const midX = Math.floor(width / 2);
+  const midY = Math.floor(height / 2);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const boundary = x === 0 || y === 0 || x === width - 1 || y === height - 1;
-      const deterministicObstacle = !boundary && x % 6 === 0 && y % 5 === 0;
+      const nearSpawn = x <= 6 && y <= 6;
+      const isAvenue = x === midX || x === midX - 1 || y === midY || y === midY - 1;
+      const centralPlaza = x >= midX - 2 && x <= midX + 2 && y >= midY - 2 && y <= midY + 2;
+      const isRuinBlock = x > 4 && y > 4 && x < width - 5 && y < height - 5 && (x + 2) % 9 <= 1 && (y + 3) % 8 <= 1;
+      const isPillar = x > 4 && y > 4 && x < width - 5 && y < height - 5 && x % 7 === 0 && y % 6 === 0;
+      const rubbleSeed = (x * 31 + y * 17 + x * y * 7) % 97;
+      const rubbleCluster = rubbleSeed < 3 && x > 4 && y > 4 && x < width - 5 && y < height - 5;
+      const deterministicObstacle =
+        !nearSpawn && !isAvenue && !centralPlaza && (isRuinBlock || isPillar || rubbleCluster || (x % 9 === 0 && y % 10 === 0));
       tiles.push({
         x,
         y,
@@ -264,7 +279,7 @@ function zombieTypeForWaveSlot(wave: number, slot: number): ZombieType {
 }
 
 function enumerateSpawnCandidates(state: GameState): Vec2[] {
-  const defaultCandidates = DEFAULT_ZOMBIE_POSITIONS.map(position => ({ ...position }));
+  const defaultCandidates = defaultTerminatorPositions(state.map.width, state.map.height).map(position => ({ ...position }));
   const edgeTiles = state.map.tiles
     .filter(tile => tile.type === "grass")
     .map(tile => ({ x: tile.x, y: tile.y }))
@@ -787,12 +802,13 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
   const mode = input.mode ?? "endless";
   const playerId = input.playerId ?? deterministicInitialPlayerId(sessionId);
   const playerName = input.playerName?.trim() || "Survivor-1";
-  const requestedZombieCount = input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length;
+  const map = createInitialMap();
+  const defaultSpawnPositions = defaultTerminatorPositions(map.width, map.height);
+  const requestedZombieCount = input.zombieCount ?? defaultSpawnPositions.length;
   if (!Number.isInteger(requestedZombieCount) || requestedZombieCount < 1 || requestedZombieCount > 32) {
     throw new GameRuleError("INVALID_ZOMBIE_COUNT", "zombieCount must be an integer between 1 and 32.");
   }
   const zombieCount = requestedZombieCount;
-  const map = createInitialMap();
   const createdAt = 0;
 
   const player = createPlayer(playerId, playerName, PLAYER_START);
@@ -803,7 +819,7 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
       x: Math.max(1, map.width - 2 - index),
       y: Math.max(1, map.height - 2 - index),
     };
-    const position = DEFAULT_ZOMBIE_POSITIONS[index] ?? fallbackPosition;
+    const position = defaultSpawnPositions[index] ?? fallbackPosition;
     const tile = tileAt(map, position);
     const finalPosition = tile?.type === "grass" ? position : fallbackPosition;
     const zombieType = zombieTypeForWaveSlot(1, index + 1);

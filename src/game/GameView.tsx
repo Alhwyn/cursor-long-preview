@@ -627,7 +627,7 @@ export function GameView() {
             </div>
           </div>
 
-          <IsometricCanvas state={state} />
+          <IsometricCanvas state={state} focusPlayerId={playerId} />
 
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
             <h2 className="font-semibold text-lg mb-3">Action Controls</h2>
@@ -801,6 +801,7 @@ export function GameView() {
             <div className="text-sm text-slate-300">Tick: {state?.tick ?? 0}</div>
             <div className="text-sm text-slate-300">Mode: {state?.mode ?? "—"}</div>
             <div className="text-sm text-slate-300">Wave: {state?.wave ?? 0}</div>
+            <div className="text-sm text-slate-300">Map: {state ? `${state.map.width}×${state.map.height}` : "—"}</div>
             <div className="text-sm text-slate-300">HP: {self ? `${self.hp}/${self.maxHp}` : "—"}</div>
             <div className="text-sm text-slate-300">Terminators Active: {aliveZombies}</div>
             <div className="text-sm text-slate-300">
