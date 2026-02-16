@@ -10,11 +10,11 @@ import {
   type PartyResponse,
   type PartySnapshot,
   type PartyStartResponse,
-  type RealtimeEnvelope,
   type ServersResponse,
   type SessionStateResponse,
 } from "../api";
 import type { Action, GameState, Observation } from "../types";
+import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
 import { useShooterKeyboard } from "./useShooterKeyboard";
 
 export interface GameViewController {
@@ -70,7 +70,6 @@ export function useGameViewController(): GameViewController {
   const [error, setError] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
   const [systemFeed, setSystemFeed] = useState<string[]>([]);
-  const [realtimeStatus, setRealtimeStatus] = useState<"offline" | "connecting" | "live" | "degraded">("offline");
 
   const [servers, setServers] = useState<LobbyServer[]>([]);
   const [supabaseMode, setSupabaseMode] = useState<"enabled" | "disabled">("disabled");
@@ -161,27 +160,10 @@ export function useGameViewController(): GameViewController {
         setPlayerId(data.playerId);
         setState(data.state);
         setObservation(data.observation);
-        if (!party) {
-          setRealtimeStatus("offline");
-        }
       });
     },
-    [party, runBusyMutation],
+    [runBusyMutation],
   );
-
-  const refreshState = useCallback(async () => {
-    if (!sessionId || !playerId || realtimeStatus === "live") {
-      return;
-    }
-
-    try {
-      const stateData = await request<SessionStateResponse>(`/api/game/state?session=${encodeURIComponent(sessionId)}`);
-      setState(stateData.state);
-      await refreshObservation(sessionId, playerId);
-    } catch (errorValue) {
-      setError(String(errorValue));
-    }
-  }, [playerId, realtimeStatus, refreshObservation, sessionId]);
 
   const sendAction = useCallback(
     async (action: Action) => {
@@ -286,7 +268,6 @@ export function useGameViewController(): GameViewController {
       setParty(data.party);
       setPlayerId(data.player.playerId);
       setPartyCodeInput(data.party.partyCode);
-      setRealtimeStatus("connecting");
       pushSystemFeed(`Party created (${data.party.partyCode}).`);
     });
   }, [playerName, pushSystemFeed, runBusyMutation]);
@@ -307,7 +288,6 @@ export function useGameViewController(): GameViewController {
       });
       setParty(data.party);
       setPlayerId(data.player.playerId);
-      setRealtimeStatus("connecting");
       pushSystemFeed(`Joined party ${data.party.partyCode}.`);
     });
   }, [partyCodeInput, playerName, pushSystemFeed, runBusyMutation]);
@@ -368,7 +348,6 @@ export function useGameViewController(): GameViewController {
       if (!data.party) {
         setParty(null);
         setPartyCodeInput("");
-        setRealtimeStatus("offline");
       } else {
         setParty(data.party);
       }
@@ -379,6 +358,56 @@ export function useGameViewController(): GameViewController {
   useEffect(() => {
     loadServers();
   }, [loadServers]);
+
+  const handleRealtimeConnected = useCallback(
+    (partyId: string) => {
+      pushSystemFeed(`Realtime sync active for ${partyId}.`);
+    },
+    [pushSystemFeed],
+  );
+
+  const handleRealtimePartyUpdate = useCallback((nextParty: PartySnapshot) => {
+    setParty(nextParty);
+  }, []);
+
+  const handleRealtimeSessionState = useCallback(
+    (nextSessionId: string, nextState: GameState) => {
+      setSessionId(nextSessionId);
+      setState(nextState);
+      void refreshObservation(nextSessionId, playerId);
+    },
+    [playerId, refreshObservation],
+  );
+
+  const handleRealtimeSystemNotice = useCallback(
+    (level: string, message: string) => {
+      pushSystemFeed(`${level.toUpperCase()}: ${message}`);
+    },
+    [pushSystemFeed],
+  );
+
+  const realtimeStatus = usePartyRealtimeStream({
+    party,
+    playerId,
+    onConnected: handleRealtimeConnected,
+    onPartyUpdate: handleRealtimePartyUpdate,
+    onSessionState: handleRealtimeSessionState,
+    onSystemNotice: handleRealtimeSystemNotice,
+  });
+
+  const refreshState = useCallback(async () => {
+    if (!sessionId || !playerId || realtimeStatus === "live") {
+      return;
+    }
+
+    try {
+      const stateData = await request<SessionStateResponse>(`/api/game/state?session=${encodeURIComponent(sessionId)}`);
+      setState(stateData.state);
+      await refreshObservation(sessionId, playerId);
+    } catch (errorValue) {
+      setError(String(errorValue));
+    }
+  }, [playerId, realtimeStatus, refreshObservation, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !playerId || realtimeStatus === "live") {
@@ -391,55 +420,6 @@ export function useGameViewController(): GameViewController {
 
     return () => window.clearInterval(interval);
   }, [playerId, realtimeStatus, refreshState, sessionId]);
-
-  useEffect(() => {
-    if (!party || !playerId) {
-      setRealtimeStatus("offline");
-      return;
-    }
-
-    setRealtimeStatus("connecting");
-    const source = new EventSource(
-      `/api/realtime/stream?partyId=${encodeURIComponent(party.partyId)}&playerId=${encodeURIComponent(playerId)}`,
-    );
-
-    source.addEventListener("connected", event => {
-      const envelope = JSON.parse((event as MessageEvent<string>).data) as RealtimeEnvelope<{
-        partyId: string;
-        playerId: string;
-      }>;
-      setRealtimeStatus("live");
-      pushSystemFeed(`Realtime sync active for ${envelope.data.partyId}.`);
-    });
-
-    source.addEventListener("party_update", event => {
-      const envelope = JSON.parse((event as MessageEvent<string>).data) as RealtimeEnvelope<{ party: PartySnapshot }>;
-      setParty(envelope.data.party);
-    });
-
-    source.addEventListener("session_state", event => {
-      const envelope = JSON.parse((event as MessageEvent<string>).data) as RealtimeEnvelope<{
-        sessionId: string;
-        state: GameState;
-      }>;
-      setSessionId(envelope.data.sessionId);
-      setState(envelope.data.state);
-      void refreshObservation(envelope.data.sessionId, playerId);
-    });
-
-    source.addEventListener("system_notice", event => {
-      const envelope = JSON.parse((event as MessageEvent<string>).data) as RealtimeEnvelope<{ level: string; message: string }>;
-      pushSystemFeed(`${envelope.data.level.toUpperCase()}: ${envelope.data.message}`);
-    });
-
-    source.onerror = () => {
-      setRealtimeStatus("degraded");
-    };
-
-    return () => {
-      source.close();
-    };
-  }, [party, playerId, pushSystemFeed, refreshObservation]);
 
   useShooterKeyboard({
     sessionId,
