@@ -23,6 +23,7 @@ import PartyLobbyPanel from "./components/PartyLobbyPanel";
 import ServerBrowserPanel from "./components/ServerBrowserPanel";
 import ShooterControls from "./components/ShooterControls";
 import SystemFeedPanel from "./components/SystemFeedPanel";
+import { useShooterKeyboard } from "./hooks/useShooterKeyboard";
 
 export function GameView() {
   const [sessionId, setSessionId] = useState<string>("");
@@ -441,56 +442,15 @@ export function GameView() {
     };
   }, [party, playerId, pushSystemFeed, refreshObservation]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) {
-        return;
-      }
-      if (!sessionId || !playerId || !state || state.status !== "active") {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-      if (key === "w" || key === "arrowup") {
-        event.preventDefault();
-        void sendAction({ type: "move", direction: "up" });
-      } else if (key === "s" || key === "arrowdown") {
-        event.preventDefault();
-        void sendAction({ type: "move", direction: "down" });
-      } else if (key === "a" || key === "arrowleft") {
-        event.preventDefault();
-        void sendAction({ type: "move", direction: "left" });
-      } else if (key === "d" || key === "arrowright") {
-        event.preventDefault();
-        void sendAction({ type: "move", direction: "right" });
-      } else if (key === " ") {
-        event.preventDefault();
-        void sendAction({ type: "shoot" });
-      } else if (key === "f") {
-        event.preventDefault();
-        void sendAction({ type: "attack" });
-      } else if (key === "1") {
-        event.preventDefault();
-        const facingDirection = self?.facing ?? "up";
-        void sendAction({ type: "build", buildType: "barricade", direction: facingDirection });
-      } else if (key === "2") {
-        event.preventDefault();
-        const facingDirection = self?.facing ?? "up";
-        void sendAction({ type: "build", buildType: "ally_robot", direction: facingDirection });
-      } else if (key === "3") {
-        event.preventDefault();
-        const facingDirection = self?.facing ?? "up";
-        void sendAction({ type: "build", buildType: "turret", direction: facingDirection });
-      } else if (key === "enter") {
-        event.preventDefault();
-        void sendAction({ type: "wait" });
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [playerId, self?.facing, sendAction, sessionId, state]);
+  useShooterKeyboard({
+    sessionId,
+    playerId,
+    state,
+    facing: self?.facing,
+    onAction: action => {
+      void sendAction(action);
+    },
+  });
 
   return (
     <div className="w-full max-w-[1500px] mx-auto p-4 md:p-6 text-slate-100">
