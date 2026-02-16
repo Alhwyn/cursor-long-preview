@@ -275,7 +275,7 @@ function pickZombieTarget(state: GameState, actor: Player, targetId?: string): Z
   }
 
   if (targetId) {
-    const explicitTarget = state.zombies[targetId];
+    const explicitTarget = state.zombies[targetId.trim()];
     if (!explicitTarget || !explicitTarget.alive) {
       throw new GameRuleError("TARGET_NOT_FOUND", "Target terminator does not exist or is already destroyed.");
     }
