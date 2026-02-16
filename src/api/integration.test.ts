@@ -1543,6 +1543,48 @@ describe("RPC API integration (fallback mode)", () => {
     expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
   });
 
+  test("shoot cooldown is enforced before trimmed explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootCooldownTrimmedTargetValidation" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const firstShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const firstShotPayload = await firstShotResponse.json();
+
+    const secondShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: "  z-missing  " },
+      }),
+    });
+    const secondShotPayload = await secondShotResponse.json();
+
+    expect(firstShotResponse.status).toBe(200);
+    expect(firstShotPayload.ok).toBe(true);
+    expect(secondShotResponse.status).toBe(409);
+    expect(secondShotPayload.ok).toBe(false);
+    expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
   test("shoot action with direction updates facing even when it misses", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

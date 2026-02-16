@@ -462,6 +462,15 @@ describe("engine", () => {
     expect(() => applyAction(afterMiss, "p-1", { type: "shoot", targetId: "z-missing" })).toThrow("cooldown");
   });
 
+  test("shoot cooldown is enforced before trimmed explicit target validation", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot" });
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot", targetId: "  z-missing  " })).toThrow("cooldown");
+  });
+
   test("shoot miss with explicit direction updates facing", () => {
     const state = makeState();
     state.players["p-1"]!.facing = "right";
