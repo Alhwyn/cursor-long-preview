@@ -806,6 +806,30 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observePayload.data.observation.playerId).toBe(expectedPlayerId);
   });
 
+  test("observe payload includes terminators alias with matching entities", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ObserverTerminatorAlias" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const observeResponse = await fetch(`${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}`);
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    expect(observePayload.data.observation.terminators).toHaveLength(observePayload.data.observation.zombies.length);
+
+    const zombieIds = observePayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
+    const terminatorIds = observePayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
+    expect(terminatorIds).toEqual(zombieIds);
+  });
+
   test("observe with unknown player returns 404", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
