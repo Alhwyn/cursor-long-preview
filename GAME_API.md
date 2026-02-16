@@ -349,7 +349,7 @@ Request:
 
 ```json
 {
-  "name": "Zombie Meadow",
+  "name": "Terminator Meadow",
   "description": "Casual run",
   "maxPlayers": 4
 }
@@ -368,7 +368,7 @@ Response:
     "mode": "disabled",
     "server": {
       "id": "srv-...",
-      "name": "Zombie Meadow",
+      "name": "Terminator Meadow",
       "maxPlayers": 4
     }
   }

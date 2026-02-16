@@ -46,7 +46,8 @@ ready_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-ready-two.json -w "%
 ready_three_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-ready-three.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${player_three_id}\",\"ready\":true}")"
 ready_four_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-ready-four.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${player_four_id}\",\"ready\":true}")"
 
-start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\"}")"
+mismatched_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-mismatched-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":3}")"
+start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":2}")"
 session_id="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())["data"]["sessionId"])')"
 agent_key_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-key.json -w "%{http_code}" -X POST "${BASE_URL}/api/agent/access-key" -H "Content-Type: application/json" -d "{\"session\":\"${session_id}\",\"playerId\":\"${leader_player_id}\"}")"
 agent_access_key="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-key.json").read_text())["data"]["accessKey"])')"
@@ -59,6 +60,7 @@ python3 - <<'PY' \
   "${join_two_status}" "${join_three_status}" "${join_four_status}" "${overflow_join_status}" \
   "${non_leader_start_status}" "${not_ready_start_status}" \
   "${ready_one_status}" "${ready_two_status}" "${ready_three_status}" "${ready_four_status}" \
+  "${mismatched_count_start_status}" \
   "${start_status}" "${agent_key_status}" "${agent_join_status}" "${agent_reuse_status}" "${party_state_status}"
 import json
 import pathlib
@@ -75,15 +77,17 @@ ready_one_status = int(sys.argv[8])
 ready_two_status = int(sys.argv[9])
 ready_three_status = int(sys.argv[10])
 ready_four_status = int(sys.argv[11])
-start_status = int(sys.argv[12])
-agent_key_status = int(sys.argv[13])
-agent_join_status = int(sys.argv[14])
-agent_reuse_status = int(sys.argv[15])
-party_state_status = int(sys.argv[16])
+mismatched_count_start_status = int(sys.argv[12])
+start_status = int(sys.argv[13])
+agent_key_status = int(sys.argv[14])
+agent_join_status = int(sys.argv[15])
+agent_reuse_status = int(sys.argv[16])
+party_state_status = int(sys.argv[17])
 
 overflow_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-overflow-join.json").read_text())
 non_leader_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-nonleader-start.json").read_text())
 not_ready_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-notready-start.json").read_text())
+mismatched_count_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-mismatched-count-start.json").read_text())
 start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())
 agent_key_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-key.json").read_text())
 agent_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-join.json").read_text())
@@ -115,12 +119,21 @@ assert ready_two_status == 200, f"ready two should be 200, got {ready_two_status
 assert ready_three_status == 200, f"ready three should be 200, got {ready_three_status}"
 assert ready_four_status == 200, f"ready four should be 200, got {ready_four_status}"
 
+assert mismatched_count_start_status == 400, (
+    f"party start with mismatched zombieCount/terminatorCount should be 400, got {mismatched_count_start_status}"
+)
+assert mismatched_count_start_payload["ok"] is False, "mismatched count start payload should fail"
+assert mismatched_count_start_payload["error"]["code"] == "INVALID_FIELD", (
+    f"unexpected mismatched count start code: {mismatched_count_start_payload['error']['code']}"
+)
+
 assert start_status == 200, f"party start should be 200, got {start_status}"
 assert start_payload["ok"] is True, "party start payload should succeed"
 assert start_payload["data"]["party"]["status"] == "in_game", (
     f"party status should be in_game, got {start_payload['data']['party']['status']}"
 )
 assert len(start_payload["data"]["state"]["players"]) == 4, "party-started session should include four players"
+assert len(start_payload["data"]["state"]["zombies"]) == 2, "party start with terminatorCount should include two terminators"
 assert start_payload["data"]["state"]["companion"]["name"] == "Claude Bot", "party-started session should include Claude Bot companion"
 assert start_payload["data"]["state"]["mode"] == "endless", "party-started session should default to endless mode"
 
