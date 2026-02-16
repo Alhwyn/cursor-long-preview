@@ -338,6 +338,16 @@ describe("engine", () => {
     expect(next.zombies["z-1"]?.hp).toBe(44);
   });
 
+  test("shoot miss still consumes cooldown", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot" });
+    expect(afterMiss.zombies["z-1"]?.hp).toBe(70);
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot" })).toThrow("cooldown");
+  });
+
   test("build turret deploys and can attack terminator robots", () => {
     const state = makeState();
     state.scrap = 200;

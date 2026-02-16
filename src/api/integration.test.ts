@@ -1263,6 +1263,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(buildPayload.error.code).toBe("INSUFFICIENT_SCRAP");
   });
 
+  test("turret build without enough scrap returns conflict", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TurretNoScrap", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const buildResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "build", buildType: "turret", direction: "right" },
+      }),
+    });
+    const buildPayload = await buildResponse.json();
+
+    expect(buildResponse.status).toBe(409);
+    expect(buildPayload.ok).toBe(false);
+    expect(buildPayload.error.code).toBe("INSUFFICIENT_SCRAP");
+  });
+
   test("attack cooldown is enforced once in range", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
