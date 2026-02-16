@@ -909,6 +909,39 @@ describe("RPC API integration (fallback mode)", () => {
     expect(Object.keys(payload.data.state.zombies).length).toBe(3);
   });
 
+  test("matching boundary counts are accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingMinBoundaryCountsJoin",
+        zombieCount: 1,
+        terminatorCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingMaxBoundaryCountsJoin",
+        zombieCount: 32,
+        terminatorCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
+  });
+
   test("mismatched zombieCount and terminatorCount is rejected", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3862,6 +3895,45 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startResponse.status).toBe(200);
     expect(startPayload.ok).toBe(true);
     expect(Object.keys(startPayload.data.state.zombies).length).toBe(3);
+  });
+
+  test("party start accepts matching boundary counts", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        zombieCount: 1,
+        terminatorCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        zombieCount: 32,
+        terminatorCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
   });
 
   test("party start rejects mismatched zombieCount and terminatorCount", async () => {
