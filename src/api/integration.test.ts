@@ -1223,6 +1223,26 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("null zombieCount with invalid terminatorCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithInvalidTerminatorCountType",
+        zombieCount: null,
+        terminatorCount: "4",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("invalid terminatorCount is rejected even when zombieCount is valid", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1352,6 +1372,26 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         playerName: "NullTerminatorCountWithFractionalZombieCount",
         zombieCount: 1.5,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount with invalid zombieCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithInvalidZombieCountType",
+        zombieCount: "4",
         terminatorCount: null,
       }),
     });
@@ -4842,6 +4882,31 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("party start null zombieCount with invalid terminatorCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithInvalidTerminatorCountTypeLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: "2",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("party start rejects invalid terminatorCount even when zombieCount is valid", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -5007,6 +5072,31 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         zombieCount: 1.5,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount with invalid zombieCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithInvalidZombieCountTypeLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "2",
         terminatorCount: null,
       }),
     });
