@@ -18,6 +18,7 @@ import type { Action, GameState, Observation } from "../types";
 import { useBusyMutation } from "./useBusyMutation";
 import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
 import { useSessionPolling } from "./useSessionPolling";
+import { useSystemFeed } from "./useSystemFeed";
 import { useShooterKeyboard } from "./useShooterKeyboard";
 
 export interface GameViewController {
@@ -70,8 +71,8 @@ export function useGameViewController(): GameViewController {
   const [serverInput, setServerInput] = useState<string>("");
   const [state, setState] = useState<GameState | null>(null);
   const [observation, setObservation] = useState<Observation | null>(null);
-  const [systemFeed, setSystemFeed] = useState<string[]>([]);
   const { busy, error, setErrorMessage, runBusyMutation } = useBusyMutation();
+  const { systemFeed, pushSystemFeed } = useSystemFeed(16);
 
   const [servers, setServers] = useState<LobbyServer[]>([]);
   const [supabaseMode, setSupabaseMode] = useState<"enabled" | "disabled">("disabled");
@@ -111,10 +112,6 @@ export function useGameViewController(): GameViewController {
   const canStartParty = useMemo(() => {
     return Boolean(party && isPartyLeader && party.status === "open" && party.allReady);
   }, [isPartyLeader, party]);
-
-  const pushSystemFeed = useCallback((message: string) => {
-    setSystemFeed(previous => [message, ...previous].slice(0, 16));
-  }, []);
 
   const refreshObservation = useCallback(async (targetSessionId: string, targetPlayerId: string) => {
     const observeData = await request<ObserveResponse>(
