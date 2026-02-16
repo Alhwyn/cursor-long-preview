@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   request,
   type CreateServerResponse,
@@ -16,6 +16,7 @@ import {
 import type { RealtimeStatus } from "../realtimeStatus";
 import type { Action, GameState, Observation } from "../types";
 import { useBusyMutation } from "./useBusyMutation";
+import { useGameViewDerivedState } from "./useGameViewDerivedState";
 import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
 import { useSessionPolling } from "./useSessionPolling";
 import { useSystemFeed } from "./useSystemFeed";
@@ -81,37 +82,11 @@ export function useGameViewController(): GameViewController {
   const [partyCodeInput, setPartyCodeInput] = useState<string>("");
   const [party, setParty] = useState<PartySnapshot | null>(null);
 
-  const self = useMemo(() => {
-    if (!state || !playerId) {
-      return null;
-    }
-    return state.players[playerId] ?? null;
-  }, [playerId, state]);
-
-  const aliveTerminators = useMemo(() => {
-    if (!state) {
-      return 0;
-    }
-    return Object.values(state.zombies).filter(zombie => zombie.alive).length;
-  }, [state]);
-
-  const selfPartyMember = useMemo(() => {
-    if (!party || !playerId) {
-      return null;
-    }
-    return party.members.find(member => member.playerId === playerId) ?? null;
-  }, [party, playerId]);
-
-  const isPartyLeader = useMemo(() => {
-    if (!party || !playerId) {
-      return false;
-    }
-    return party.leaderPlayerId === playerId;
-  }, [party, playerId]);
-
-  const canStartParty = useMemo(() => {
-    return Boolean(party && isPartyLeader && party.status === "open" && party.allReady);
-  }, [isPartyLeader, party]);
+  const { self, selfPartyMember, canStartParty, aliveTerminators } = useGameViewDerivedState({
+    state,
+    playerId,
+    party,
+  });
 
   const refreshObservation = useCallback(async (targetSessionId: string, targetPlayerId: string) => {
     const observeData = await request<ObserveResponse>(
