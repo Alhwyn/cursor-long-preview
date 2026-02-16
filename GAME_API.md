@@ -56,6 +56,11 @@ When both are sent, each field is validated independently (type + integer range 
 Count field validation errors:
 - `400 INVALID_FIELD` for non-numeric values (for either field) or dual-field mismatches.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+Boundary behavior:
+- `terminatorCount` accepts `1` and `32`.
+- legacy `zombieCount` accepts `1` and `32`.
+- dual-field requests with matching boundaries (`1/1`, `32/32`) are accepted.
+- dual-field requests with mismatched boundaries (`1/32` or `32/1`) return `400 INVALID_FIELD`.
 `agentEnabled` is optional boolean (when true on new session, spawns Claude Bot combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
@@ -521,6 +526,11 @@ If both are sent, each field is validated independently (type + integer range ch
 Count field validation errors:
 - `400 INVALID_FIELD` for non-numeric values (for either field) or dual-field mismatches.
 - `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+Boundary behavior:
+- `terminatorCount` accepts `1` and `32`.
+- legacy `zombieCount` accepts `1` and `32`.
+- dual-field requests with matching boundaries (`1/1`, `32/32`) are accepted.
+- dual-field requests with mismatched boundaries (`1/32` or `32/1`) return `400 INVALID_FIELD`.
 
 Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.
