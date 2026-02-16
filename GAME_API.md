@@ -264,6 +264,7 @@ Response:
 ```
 
 Behavior note:
+- When provided, `attack.targetId` and `shoot.targetId` values are trimmed before lookup.
 - `attack` can auto-select nearest living robot when `targetId` is omitted.
 - If explicit `attack.targetId` is missing or already destroyed, the action fails with `TARGET_NOT_FOUND`.
 - If explicit `attack.targetId` is out of range, the action fails with `TARGET_OUT_OF_RANGE`.
