@@ -95,8 +95,12 @@ async function observeNearestZombie(
   const observePayload = await observeResponse.json();
   expect(observeResponse.status).toBe(200);
   expect(observePayload.ok).toBe(true);
-
-  return (observePayload.data.observation.nearestZombie as NearestZombieObservation | undefined) ?? null;
+  const nearestZombie = observePayload.data.observation.nearestZombie as NearestZombieObservation | undefined;
+  const nearestTerminator = observePayload.data.observation.nearestTerminator as NearestZombieObservation | undefined;
+  if (nearestZombie && nearestTerminator) {
+    expect(nearestTerminator).toEqual(nearestZombie);
+  }
+  return nearestTerminator ?? nearestZombie ?? null;
 }
 
 interface MovePlayerIntoRangeOptions {
