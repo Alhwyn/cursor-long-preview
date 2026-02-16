@@ -19,7 +19,7 @@ unknown_target_attack_status="$(curl -sS -o /tmp/rpc-zombie-smoke-unknown-target
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"attack\",\"targetId\":\"z-missing\"}}")"
 shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
-  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"direction\":\"right\"}}")"
+  -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"direction\":\"up\"}}")"
 second_shoot_status="$(curl -sS -o /tmp/rpc-zombie-smoke-second-shoot.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
   -d "{\"session\":\"${session_id}\",\"playerId\":\"${player_id}\",\"action\":{\"type\":\"shoot\",\"direction\":\"right\"}}")"
@@ -220,6 +220,7 @@ blank_route_server_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke
 duplicate_join_one_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-one.json").read_text())
 duplicate_join_two_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-two.json").read_text())
 action_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-action.json").read_text())
+shoot_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-shoot.json").read_text())
 second_shoot_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-second-shoot.json").read_text())
 out_of_range_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-attack.json").read_text())
 unknown_target_attack_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-unknown-target-attack.json").read_text())
@@ -249,6 +250,10 @@ assert action_terminator_ids == action_zombie_ids, (
     f"action observation alias mismatch: zombies={action_zombie_ids} terminators={action_terminator_ids}"
 )
 assert shoot_status == 200, f"shoot action status unexpected: {shoot_status}"
+assert shoot_payload["ok"] is True, "shoot action payload should be success"
+assert shoot_payload["data"]["state"]["players"][join_payload["data"]["playerId"]]["facing"] == "up", (
+    f"shoot facing update mismatch: {shoot_payload['data']['state']['players'][join_payload['data']['playerId']]['facing']}"
+)
 assert second_shoot_status == 409, f"second shoot action should be 409, got {second_shoot_status}"
 assert out_of_range_attack_status == 409, f"out-of-range attack should be 409, got {out_of_range_attack_status}"
 assert unknown_target_attack_status == 404, f"unknown target attack should be 404, got {unknown_target_attack_status}"
