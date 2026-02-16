@@ -26,7 +26,7 @@
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/game/join \
   -H "Content-Type: application/json" \
-  -d '{"playerName":"Agent"}'
+  -d '{"playerName":"Agent","terminatorCount":4}'
 ```
 
 ### Join Existing Session (agent handoff by `sessionId`)
@@ -94,6 +94,18 @@ curl -s -X POST http://127.0.0.1:3000/api/game/action \
   }'
 ```
 
+### Shoot
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/api/game/action \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session":"<SESSION>",
+    "playerId":"<PLAYER>",
+    "action":{"type":"shoot","direction":"up"}
+  }'
+```
+
 ### Build (barricade / ally robot / turret)
 
 ```bash
@@ -152,7 +164,7 @@ curl -s -X POST http://127.0.0.1:3000/api/party/ready \
 
 curl -s -X POST http://127.0.0.1:3000/api/party/start \
   -H "Content-Type: application/json" \
-  -d '{"partyId":"<PARTY>","playerId":"<LEADER>","agentEnabled":true}'
+  -d '{"partyId":"<PARTY>","playerId":"<LEADER>","terminatorCount":6,"agentEnabled":true}'
 ```
 
 Take the `sessionId` from this response and pass it to any helper agents via `POST /api/game/join`.
@@ -162,9 +174,10 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 - `SESSION_NOT_FOUND` -> restart flow from `/api/game/join`.
 - `SESSION_SERVER_MISMATCH` -> remove conflicting `serverId` or rejoin via the correct server flow.
 - `PLAYER_NOT_FOUND` -> player/session mismatch; refresh from join response.
-- `TARGET_NOT_FOUND` -> retry attack without `targetId` or refresh observation to choose a valid terminator id.
-- `INVALID_ZOMBIE_COUNT` -> retry join with integer `zombieCount` in `[1, 32]`.
-- `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `targetId`) are non-empty strings when supplied (surrounding whitespace is trimmed by server).
+- `TARGET_NOT_FOUND` -> retry attack/shoot without `targetId` or refresh observation to choose a valid terminator id.
+- `INVALID_ZOMBIE_COUNT` -> retry with integer `terminatorCount` (or legacy `zombieCount`) in `[1, 32]`.
+- `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `attack.targetId`, `shoot.targetId`) are non-empty strings when supplied (surrounding whitespace is trimmed by server).
+- `INVALID_FIELD` also covers explicit `null` for `terminatorCount` / `zombieCount`, including single-field requests.
 - `MISSING_SERVER_ID` -> ensure `POST /api/servers/:id/join` includes a non-empty `:id` path segment; surrounding whitespace is trimmed by server.
 - `PARTY_NOT_READY` -> ensure every party member marked ready before leader starts.
 - `PARTY_NOT_LEADER` -> call `POST /api/party/start` with leader `playerId`.
@@ -185,7 +198,7 @@ Take the `sessionId` from this response and pass it to any helper agents via `PO
 
 ## Observation-driven movement heuristic
 
-Given `nearestZombie.dx` and `nearestZombie.dy` (nearest terminator vector):
+Given `nearestTerminator.dx` and `nearestTerminator.dy` (preferred alias; equivalent to legacy `nearestZombie`):
 
 - if `abs(dx) >= abs(dy)`, prioritize horizontal move:
   - `dx > 0` => `right`
