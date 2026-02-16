@@ -15,6 +15,7 @@ import {
 } from "../api";
 import type { Action, GameState, Observation } from "../types";
 import { usePartyRealtimeStream } from "./usePartyRealtimeStream";
+import { useSessionPolling } from "./useSessionPolling";
 import { useShooterKeyboard } from "./useShooterKeyboard";
 
 export interface GameViewController {
@@ -409,17 +410,11 @@ export function useGameViewController(): GameViewController {
     }
   }, [playerId, realtimeStatus, refreshObservation, sessionId]);
 
-  useEffect(() => {
-    if (!sessionId || !playerId || realtimeStatus === "live") {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      void refreshState();
-    }, 350);
-
-    return () => window.clearInterval(interval);
-  }, [playerId, realtimeStatus, refreshState, sessionId]);
+  useSessionPolling({
+    enabled: Boolean(sessionId && playerId && realtimeStatus !== "live"),
+    intervalMs: 350,
+    onPoll: refreshState,
+  });
 
   useShooterKeyboard({
     sessionId,
