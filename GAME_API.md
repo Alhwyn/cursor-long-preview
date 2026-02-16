@@ -52,6 +52,7 @@ Request:
 `terminatorCount` must be an integer from `1` to `32`.
 `zombieCount` remains a legacy alias for backward compatibility.
 If both `terminatorCount` and `zombieCount` are provided, they must match.
+When both are sent, each field is validated independently; an invalid type/value in either field is rejected.
 `agentEnabled` is optional boolean (when true on new session, spawns Claude Bot combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
@@ -513,6 +514,7 @@ Request:
 `terminatorCount` is the preferred spawn-count field for party starts.
 `zombieCount` remains a legacy alias; when both are provided they must match.
 Both fields, when provided, must be integers from `1` to `32`.
+If both are sent, each field is validated independently before matching is enforced.
 
 Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.

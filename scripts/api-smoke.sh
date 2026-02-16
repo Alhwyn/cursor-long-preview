@@ -22,6 +22,9 @@ matching_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-matching-count-j
 invalid_zombiecount_with_valid_terminatorcount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-zombiecount-with-valid-terminatorcount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"InvalidZombieCountWithValidTerminatorCountSmoke","zombieCount":"4","terminatorCount":4}')"
+invalid_terminatorcount_with_valid_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-invalid-terminatorcount-with-valid-zombiecount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"InvalidTerminatorCountWithValidZombieCountSmoke","zombieCount":4,"terminatorCount":"4"}')"
 fractional_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"FractionalTerminatorCountSmoke","terminatorCount":1.5}')"
@@ -189,7 +192,7 @@ duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-on
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${terminator_count_join_status}" "${legacy_zombie_count_join_status}" "${mismatched_count_join_status}" "${matching_count_join_status}" "${invalid_zombiecount_with_valid_terminatorcount_status}" "${fractional_terminator_count_join_status}" "${out_of_range_terminator_count_join_status}" "${string_terminator_count_join_status}"
+python3 - <<'PY' "${terminator_count_join_status}" "${legacy_zombie_count_join_status}" "${mismatched_count_join_status}" "${matching_count_join_status}" "${invalid_zombiecount_with_valid_terminatorcount_status}" "${invalid_terminatorcount_with_valid_zombiecount_status}" "${fractional_terminator_count_join_status}" "${out_of_range_terminator_count_join_status}" "${string_terminator_count_join_status}"
 import json
 import pathlib
 import sys
@@ -199,15 +202,19 @@ legacy_zombie_count_join_status = int(sys.argv[2])
 mismatched_count_join_status = int(sys.argv[3])
 matching_count_join_status = int(sys.argv[4])
 invalid_zombiecount_with_valid_terminatorcount_status = int(sys.argv[5])
-fractional_terminator_count_join_status = int(sys.argv[6])
-out_of_range_terminator_count_join_status = int(sys.argv[7])
-string_terminator_count_join_status = int(sys.argv[8])
+invalid_terminatorcount_with_valid_zombiecount_status = int(sys.argv[6])
+fractional_terminator_count_join_status = int(sys.argv[7])
+out_of_range_terminator_count_join_status = int(sys.argv[8])
+string_terminator_count_join_status = int(sys.argv[9])
 terminator_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-terminator-count-join.json").read_text())
 legacy_zombie_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-legacy-zombie-count-join.json").read_text())
 mismatched_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-mismatched-count-join.json").read_text())
 matching_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-matching-count-join.json").read_text())
 invalid_zombiecount_with_valid_terminatorcount_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-invalid-zombiecount-with-valid-terminatorcount.json").read_text()
+)
+invalid_terminatorcount_with_valid_zombiecount_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-invalid-terminatorcount-with-valid-zombiecount.json").read_text()
 )
 fractional_terminator_count_join_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-fractional-terminator-count-join.json").read_text()
@@ -259,6 +266,17 @@ assert invalid_zombiecount_with_valid_terminatorcount_payload["ok"] is False, (
 assert invalid_zombiecount_with_valid_terminatorcount_payload["error"]["code"] == "INVALID_FIELD", (
     "invalid zombieCount with valid terminatorCount code mismatch: "
     f"{invalid_zombiecount_with_valid_terminatorcount_payload['error']['code']}"
+)
+assert invalid_terminatorcount_with_valid_zombiecount_status == 400, (
+    "invalid terminatorCount with valid zombieCount join should be 400, "
+    f"got {invalid_terminatorcount_with_valid_zombiecount_status}"
+)
+assert invalid_terminatorcount_with_valid_zombiecount_payload["ok"] is False, (
+    "invalid terminatorCount with valid zombieCount payload should be failure"
+)
+assert invalid_terminatorcount_with_valid_zombiecount_payload["error"]["code"] == "INVALID_FIELD", (
+    "invalid terminatorCount with valid zombieCount code mismatch: "
+    f"{invalid_terminatorcount_with_valid_zombiecount_payload['error']['code']}"
 )
 
 assert fractional_terminator_count_join_status == 400, (
