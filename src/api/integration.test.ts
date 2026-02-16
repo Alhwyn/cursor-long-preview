@@ -2145,4 +2145,23 @@ describe("RPC API integration (supabase auth gate)", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("FORBIDDEN");
   });
+
+  test("server create rejects non-bearer auth header before body parsing", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Basic invalid-token",
+      },
+      body: "{invalid-json",
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("UNAUTHORIZED");
+  });
 });

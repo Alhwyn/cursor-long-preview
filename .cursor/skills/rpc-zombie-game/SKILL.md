@@ -48,6 +48,7 @@ Drive the server-authoritative simulation through API actions without direct sta
   - create-server requires `Authorization: Bearer <Supabase JWT>`.
   - Missing token (or non-Bearer auth header) => `401`, invalid bearer token => `403`.
   - `Bearer` scheme parsing is case-insensitive and ignores extra spaces before token value.
+  - Auth validation happens before request-body JSON validation for create-server.
 
 ## Action Strategy Hint
 

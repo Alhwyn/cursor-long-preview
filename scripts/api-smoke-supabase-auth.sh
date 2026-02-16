@@ -19,8 +19,12 @@ mixed_case_bearer_status="$(curl -sS -o /tmp/rpc-zombie-smoke-supabase-create-mi
   -H "Content-Type: application/json" \
   -H "Authorization: bEaReR    invalid-token" \
   -d '{"name":"Mixed Case Bearer Auth","maxPlayers":4}')"
+malformed_auth_invalid_json_status="$(curl -sS -o /tmp/rpc-zombie-smoke-supabase-create-malformed-auth-invalid-json.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Basic invalid-token" \
+  -d '{invalid-json')"
 
-python3 - <<'PY' "${unauthorized_status}" "${forbidden_status}" "${malformed_auth_status}" "${mixed_case_bearer_status}"
+python3 - <<'PY' "${unauthorized_status}" "${forbidden_status}" "${malformed_auth_status}" "${mixed_case_bearer_status}" "${malformed_auth_invalid_json_status}"
 import json
 import pathlib
 import sys
@@ -29,10 +33,14 @@ unauthorized_status = int(sys.argv[1])
 forbidden_status = int(sys.argv[2])
 malformed_auth_status = int(sys.argv[3])
 mixed_case_bearer_status = int(sys.argv[4])
+malformed_auth_invalid_json_status = int(sys.argv[5])
 create_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create.json").read_text())
 forbidden_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create-forbidden.json").read_text())
 malformed_auth_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create-malformed-auth.json").read_text())
 mixed_case_bearer_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create-mixed-bearer.json").read_text())
+malformed_auth_invalid_json_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-supabase-create-malformed-auth-invalid-json.json").read_text()
+)
 
 assert unauthorized_status == 401, f"expected 401 when missing bearer token, got {unauthorized_status}"
 assert create_payload["ok"] is False, "expected create failure without token"
@@ -50,10 +58,18 @@ assert mixed_case_bearer_payload["ok"] is False, "expected create failure with i
 assert mixed_case_bearer_payload["error"]["code"] == "FORBIDDEN", (
     f"unexpected code: {mixed_case_bearer_payload['error']['code']}"
 )
+assert malformed_auth_invalid_json_status == 401, (
+    f"expected 401 when non-bearer auth is provided before invalid JSON body parsing, got {malformed_auth_invalid_json_status}"
+)
+assert malformed_auth_invalid_json_payload["ok"] is False, "expected create failure with malformed auth + invalid JSON body"
+assert malformed_auth_invalid_json_payload["error"]["code"] == "UNAUTHORIZED", (
+    f"unexpected code: {malformed_auth_invalid_json_payload['error']['code']}"
+)
 
 print("api-smoke-supabase-auth: PASS")
 print("create_without_token=401 UNAUTHORIZED")
 print("create_invalid_token=403 FORBIDDEN")
 print("create_non_bearer_token=401 UNAUTHORIZED")
 print("create_mixed_case_bearer_token=403 FORBIDDEN")
+print("create_non_bearer_invalid_json=401 UNAUTHORIZED")
 PY
