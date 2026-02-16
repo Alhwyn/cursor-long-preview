@@ -1879,6 +1879,114 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
   });
 
+  test("attack with destroyed explicit target returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "DestroyedTargetAttacker", zombieCount: 2 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 8,
+    });
+    expect(inRange).toBe(true);
+
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    expect(nearestZombie).toBeTruthy();
+    const targetId = nearestZombie?.id;
+    expect(targetId).toBeTruthy();
+    const targetIdValue = targetId as string;
+
+    for (let index = 0; index < 12; index++) {
+      const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session: sessionId,
+          playerId,
+          action: { type: "shoot", targetId: targetIdValue },
+        }),
+      });
+      const shootPayload = await shootResponse.json();
+
+      if (shootResponse.status === 409) {
+        expect(shootPayload.ok).toBe(false);
+        expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+        const movedIntoRange = await movePlayerIntoRange({
+          baseUrl,
+          sessionId,
+          playerId,
+          targetDistance: 8,
+        });
+        expect(movedIntoRange).toBe(true);
+        continue;
+      }
+
+      expect(shootResponse.status).toBe(200);
+      expect(shootPayload.ok).toBe(true);
+      const targetState = (shootPayload.data.state.zombies as Record<string, { alive: boolean }>)[targetIdValue];
+      if (!targetState) {
+        throw new Error(`Expected zombie ${targetIdValue} to remain in state payload.`);
+      }
+      if (!targetState.alive) {
+        break;
+      }
+
+      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId }),
+      });
+      const tickPayload = await tickResponse.json();
+      expect(tickResponse.status).toBe(200);
+      expect(tickPayload.ok).toBe(true);
+    }
+
+    const postKillObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const postKillObservePayload = await postKillObserve.json();
+    expect(postKillObserve.status).toBe(200);
+    expect(postKillObservePayload.ok).toBe(true);
+    const postKillTarget = (postKillObservePayload.data.observation.zombies as Array<{ id: string; alive: boolean }>).find(
+      zombie => zombie.id === targetIdValue,
+    );
+    expect(postKillTarget?.alive).toBe(false);
+
+    const cooldownClearTickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const cooldownClearTickPayload = await cooldownClearTickResponse.json();
+    expect(cooldownClearTickResponse.status).toBe(200);
+    expect(cooldownClearTickPayload.ok).toBe(true);
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: targetIdValue },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
   test("build action without enough scrap returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

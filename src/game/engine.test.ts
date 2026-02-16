@@ -73,6 +73,22 @@ describe("engine", () => {
     expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "z-missing" })).toThrow("cooldown");
   });
 
+  test("attack with destroyed explicit target is rejected", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-destroyed-attack-target",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow(
+      "does not exist or is already destroyed",
+    );
+  });
+
   test("attack out of range is rejected", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 12, y: 12 };
