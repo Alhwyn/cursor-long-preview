@@ -1364,6 +1364,120 @@ describe("RPC API integration (fallback mode)", () => {
     expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
   });
 
+  test("shoot targetId takes precedence over provided direction in facing resolution", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootTargetPrecedence", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    let inRange = false;
+    for (let step = 0; step < 80; step++) {
+      const observeResponse = await fetch(
+        `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+      );
+      const observePayload = await observeResponse.json();
+      expect(observeResponse.status).toBe(200);
+      expect(observePayload.ok).toBe(true);
+
+      const nearestZombie = observePayload.data.observation.nearestZombie as
+        | { distance: number; dx: number; dy: number }
+        | undefined;
+      if (!nearestZombie) {
+        break;
+      }
+      if (nearestZombie.distance <= 4) {
+        inRange = true;
+        break;
+      }
+
+      const primaryDirection: Direction =
+        Math.abs(nearestZombie.dx) >= Math.abs(nearestZombie.dy)
+          ? nearestZombie.dx > 0
+            ? "right"
+            : "left"
+          : nearestZombie.dy > 0
+            ? "down"
+            : "up";
+      const moveResponse = await fetch(`${baseUrl}/api/game/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session: sessionId,
+          playerId,
+          action: { type: "move", direction: primaryDirection },
+        }),
+      });
+      const movePayload = await moveResponse.json();
+      if (moveResponse.status === 200) {
+        expect(movePayload.ok).toBe(true);
+        continue;
+      }
+
+      expect(moveResponse.status).toBe(409);
+      expect(movePayload.ok).toBe(false);
+      expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(movePayload.error.code);
+      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId }),
+      });
+      const tickPayload = await tickResponse.json();
+      expect(tickResponse.status).toBe(200);
+      expect(tickPayload.ok).toBe(true);
+    }
+
+    expect(inRange).toBe(true);
+    const preShootObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preShootPayload = await preShootObserve.json();
+    expect(preShootObserve.status).toBe(200);
+    expect(preShootPayload.ok).toBe(true);
+    const nearestZombie = preShootPayload.data.observation.nearestZombie as
+      | { id: string; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const expectedFacing: Direction =
+      Math.abs(nearestZombie!.dx) >= Math.abs(nearestZombie!.dy)
+        ? nearestZombie!.dx >= 0
+          ? "right"
+          : "left"
+        : nearestZombie!.dy >= 0
+          ? "down"
+          : "up";
+    const oppositeDirection: Direction =
+      expectedFacing === "left"
+        ? "right"
+        : expectedFacing === "right"
+          ? "left"
+          : expectedFacing === "up"
+            ? "down"
+            : "up";
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: nearestZombie!.id, direction: oppositeDirection },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe(expectedFacing);
+    expect(shootPayload.data.state.players[playerId].facing).not.toBe(oppositeDirection);
+  });
+
   test("out-of-range attack returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
