@@ -370,6 +370,21 @@ describe("engine", () => {
     expect(next.players["p-1"]?.facing).toBe("left");
   });
 
+  test("shoot with unknown explicit target is rejected", () => {
+    const state = makeState();
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-missing" })).toThrow(
+      "does not exist or is already destroyed",
+    );
+  });
+
+  test("shoot with explicit target out of range is rejected", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 12, y: 2 };
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-1" })).toThrow("out of weapon range");
+  });
+
   test("shoot miss still consumes cooldown", () => {
     const state = makeState();
     state.players["p-1"]!.facing = "left";
