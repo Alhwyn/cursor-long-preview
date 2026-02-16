@@ -771,6 +771,46 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("low terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("low zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowZombieCountWithValidTerminatorCount",
+        zombieCount: 0,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("terminatorCount alias is accepted for session creation", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3868,6 +3908,56 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         zombieCount: 1.5,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasLowTerminatorCountWithValidZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasLowZombieCountWithValidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
         terminatorCount: 2,
       }),
     });
