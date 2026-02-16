@@ -9,10 +9,10 @@ session_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["s
 player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["playerId"])' <<< "${join_payload}")"
 terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
-  -d '{"playerName":"TerminatorCountSmoke","terminatorCount":2}')"
+  -d '{"playerName":"TerminatorCountSmoke","terminatorCount":32}')"
 legacy_zombie_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-legacy-zombie-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
-  -d '{"playerName":"LegacyZombieCountSmoke","zombieCount":2}')"
+  -d '{"playerName":"LegacyZombieCountSmoke","zombieCount":1}')"
 mismatched_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-mismatched-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"MismatchedCountsSmoke","zombieCount":2,"terminatorCount":3}')"
@@ -286,15 +286,15 @@ assert terminator_count_join_status == 201, (
     f"terminatorCount join should be 201, got {terminator_count_join_status}"
 )
 assert terminator_count_join_payload["ok"] is True, "terminatorCount join payload should be success"
-assert len(terminator_count_join_payload["data"]["state"]["zombies"]) == 2, (
-    "terminatorCount join should initialize exactly 2 terminators"
+assert len(terminator_count_join_payload["data"]["state"]["zombies"]) == 32, (
+    "terminatorCount join should initialize exactly 32 terminators"
 )
 assert legacy_zombie_count_join_status == 201, (
     f"legacy zombieCount join should be 201, got {legacy_zombie_count_join_status}"
 )
 assert legacy_zombie_count_join_payload["ok"] is True, "legacy zombieCount join payload should be success"
-assert len(legacy_zombie_count_join_payload["data"]["state"]["zombies"]) == 2, (
-    "legacy zombieCount join should initialize exactly 2 terminators"
+assert len(legacy_zombie_count_join_payload["data"]["state"]["zombies"]) == 1, (
+    "legacy zombieCount join should initialize exactly 1 terminator"
 )
 
 assert mismatched_count_join_status == 400, (

@@ -870,6 +870,37 @@ describe("RPC API integration (fallback mode)", () => {
     expect(Object.keys(payload.data.state.zombies).length).toBe(2);
   });
 
+  test("terminatorCount alias accepts boundary values for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountBoundaryMinJoin",
+        terminatorCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountBoundaryMaxJoin",
+        terminatorCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
+  });
+
   test("legacy zombieCount alias is accepted for session creation", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -887,6 +918,37 @@ describe("RPC API integration (fallback mode)", () => {
     expect(response.status).toBe(201);
     expect(payload.ok).toBe(true);
     expect(Object.keys(payload.data.state.zombies).length).toBe(2);
+  });
+
+  test("legacy zombieCount alias accepts boundary values for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "ZombieCountBoundaryMinJoin",
+        zombieCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "ZombieCountBoundaryMaxJoin",
+        zombieCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
   });
 
   test("matching zombieCount and terminatorCount is accepted", async () => {
@@ -3852,6 +3914,43 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.data.state.companion).toBeUndefined();
   });
 
+  test("party start accepts terminatorCount alias boundary values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasTerminatorBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        terminatorCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasTerminatorBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        terminatorCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
+  });
+
   test("party start accepts legacy zombieCount alias", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3872,6 +3971,43 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startResponse.status).toBe(200);
     expect(startPayload.ok).toBe(true);
     expect(Object.keys(startPayload.data.state.zombies).length).toBe(2);
+  });
+
+  test("party start accepts legacy zombieCount alias boundary values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasLegacyBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        zombieCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasLegacyBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        zombieCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
   });
 
   test("party start accepts matching zombieCount and terminatorCount", async () => {
