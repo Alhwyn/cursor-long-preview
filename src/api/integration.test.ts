@@ -170,6 +170,71 @@ async function movePlayerIntoRange({
   return false;
 }
 
+interface ShootZombieUntilDestroyedOptions {
+  baseUrl: string;
+  sessionId: string;
+  playerId: string;
+  targetId: string;
+  targetDistance?: number;
+  maxAttempts?: number;
+}
+
+async function shootZombieUntilDestroyed({
+  baseUrl,
+  sessionId,
+  playerId,
+  targetId,
+  targetDistance = 8,
+  maxAttempts = 12,
+}: ShootZombieUntilDestroyedOptions): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    if (shootResponse.status === 409) {
+      expect(shootPayload.ok).toBe(false);
+      expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+      const movedIntoRange = await movePlayerIntoRange({
+        baseUrl,
+        sessionId,
+        playerId,
+        targetDistance,
+      });
+      expect(movedIntoRange).toBe(true);
+      continue;
+    }
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    const targetState = (shootPayload.data.state.zombies as Record<string, { alive: boolean }>)[targetId];
+    if (!targetState) {
+      throw new Error(`Expected zombie ${targetId} to remain in state payload.`);
+    }
+    if (!targetState.alive) {
+      return true;
+    }
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const tickPayload = await tickResponse.json();
+    expect(tickResponse.status).toBe(200);
+    expect(tickPayload.ok).toBe(true);
+  }
+
+  return false;
+}
+
 describe("RPC API integration (fallback mode)", () => {
   let server: RunningServer | null = null;
 
@@ -1555,58 +1620,20 @@ describe("RPC API integration (fallback mode)", () => {
     });
     expect(inRange).toBe(true);
 
-    let destroyedTargetId: string | null = null;
-    for (let index = 0; index < 12; index++) {
-      const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
-      expect(nearestZombie).toBeTruthy();
-      const targetId = nearestZombie?.id;
-      expect(targetId).toBeTruthy();
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    expect(nearestZombie).toBeTruthy();
+    const destroyedTargetIdValue = nearestZombie?.id as string;
+    expect(destroyedTargetIdValue).toBeTruthy();
 
-      const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session: sessionId,
-          playerId,
-          action: { type: "shoot", targetId },
-        }),
-      });
-      const shootPayload = await shootResponse.json();
-
-      if (shootResponse.status === 409) {
-        expect(shootPayload.ok).toBe(false);
-        expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
-        const movedIntoRange = await movePlayerIntoRange({
-          baseUrl,
-          sessionId,
-          playerId,
-          targetDistance: 8,
-        });
-        expect(movedIntoRange).toBe(true);
-        continue;
-      }
-
-      expect(shootResponse.status).toBe(200);
-      expect(shootPayload.ok).toBe(true);
-      const deadZombie = Object.values(
-        shootPayload.data.state.zombies as Record<string, { id: string; alive: boolean }>,
-      ).find(zombie => !zombie.alive);
-      if (deadZombie) {
-        destroyedTargetId = deadZombie.id;
-        break;
-      }
-
-      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: sessionId }),
-      });
-      const tickPayload = await tickResponse.json();
-      expect(tickResponse.status).toBe(200);
-      expect(tickPayload.ok).toBe(true);
-    }
-    expect(destroyedTargetId).toBeTruthy();
-    const destroyedTargetIdValue = destroyedTargetId as string;
+    const destroyed = await shootZombieUntilDestroyed({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetId: destroyedTargetIdValue,
+      targetDistance: 8,
+      maxAttempts: 12,
+    });
+    expect(destroyed).toBe(true);
 
     const cooldownClearTickResponse = await fetch(`${baseUrl}/api/game/tick`, {
       method: "POST",
@@ -1906,50 +1933,15 @@ describe("RPC API integration (fallback mode)", () => {
     expect(targetId).toBeTruthy();
     const targetIdValue = targetId as string;
 
-    for (let index = 0; index < 12; index++) {
-      const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session: sessionId,
-          playerId,
-          action: { type: "shoot", targetId: targetIdValue },
-        }),
-      });
-      const shootPayload = await shootResponse.json();
-
-      if (shootResponse.status === 409) {
-        expect(shootPayload.ok).toBe(false);
-        expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
-        const movedIntoRange = await movePlayerIntoRange({
-          baseUrl,
-          sessionId,
-          playerId,
-          targetDistance: 8,
-        });
-        expect(movedIntoRange).toBe(true);
-        continue;
-      }
-
-      expect(shootResponse.status).toBe(200);
-      expect(shootPayload.ok).toBe(true);
-      const targetState = (shootPayload.data.state.zombies as Record<string, { alive: boolean }>)[targetIdValue];
-      if (!targetState) {
-        throw new Error(`Expected zombie ${targetIdValue} to remain in state payload.`);
-      }
-      if (!targetState.alive) {
-        break;
-      }
-
-      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: sessionId }),
-      });
-      const tickPayload = await tickResponse.json();
-      expect(tickResponse.status).toBe(200);
-      expect(tickPayload.ok).toBe(true);
-    }
+    const destroyed = await shootZombieUntilDestroyed({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetId: targetIdValue,
+      targetDistance: 8,
+      maxAttempts: 12,
+    });
+    expect(destroyed).toBe(true);
 
     const postKillObserve = await fetch(
       `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
