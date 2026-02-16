@@ -731,6 +731,46 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("fractional terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("fractional zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalZombieCountWithValidTerminatorCount",
+        zombieCount: 1.5,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("terminatorCount alias is accepted for session creation", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -3779,6 +3819,56 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects fractional terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasFractionalTerminatorCountWithValidZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects fractional zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasFractionalZombieCountWithValidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+        terminatorCount: 2,
       }),
     });
     const startPayload = await startResponse.json();
