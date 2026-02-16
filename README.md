@@ -17,6 +17,16 @@ Server-authoritative terminator survival game with:
 - optional Supabase-backed lobby/auth mode
 - React 3D raycast shooter canvas client + HUD + observation panel
 
+## Shooter Controls (default client)
+
+- Move: `WASD` / arrow keys
+- Shoot forward: `Space`
+- Attack nearest terminator: `F`
+- Build in facing direction:
+  - `1` barricade
+  - `2` ally robot
+  - `3` turret
+
 ## Install
 
 ```bash

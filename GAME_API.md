@@ -199,6 +199,7 @@ Observation shape:
     "alive": true
   },
   "scrap": 32,
+  "terminators": [],
   "companion": {
     "id": "cai-agent",
     "kind": "agent",
@@ -212,9 +213,12 @@ Observation shape:
   "builtRobots": [],
   "players": [],
   "zombies": [],
+  "turrets": [],
   "entities": []
 }
 ```
+
+`zombies` remains for backward compatibility. `terminators` is an equivalent alias for robot-themed clients.
 
 ---
 
@@ -258,6 +262,10 @@ Response:
   }
 }
 ```
+
+Behavior note:
+- `shoot` fires along facing direction (or provided direction).
+- If no robot target is in that lane, the action still succeeds and consumes attack cooldown.
 
 ---
 
