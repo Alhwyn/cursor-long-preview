@@ -130,7 +130,7 @@ export function GameView() {
 
   const [servers, setServers] = useState<LobbyServer[]>([]);
   const [supabaseMode, setSupabaseMode] = useState<"enabled" | "disabled">("disabled");
-  const [serverName, setServerName] = useState<string>("Zombie Meadow");
+  const [serverName, setServerName] = useState<string>("Terminator Frontier");
   const [authToken, setAuthToken] = useState<string>("");
   const [partyCodeInput, setPartyCodeInput] = useState<string>("");
   const [party, setParty] = useState<PartySnapshot | null>(null);
@@ -571,7 +571,7 @@ export function GameView() {
   return (
     <div className="w-full max-w-[1500px] mx-auto p-4 md:p-6 text-slate-100">
       <div className="rounded-2xl border border-emerald-400/20 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-5 mb-4 shadow-[0_0_60px_rgba(16,185,129,0.08)]">
-        <h1 className="text-3xl md:text-4xl font-semibold mb-2 tracking-tight">Zombie Party Realtime</h1>
+        <h1 className="text-3xl md:text-4xl font-semibold mb-2 tracking-tight">Terminator Siege Realtime</h1>
         <p className="text-slate-300">
           4-player server-authoritative co-op with realtime party sync and low-poly inspired isometric rendering.
         </p>
@@ -799,8 +799,10 @@ export function GameView() {
             <h2 className="font-semibold text-lg">HUD</h2>
             <div className="text-sm text-slate-300">Status: {state?.status ?? "idle"}</div>
             <div className="text-sm text-slate-300">Tick: {state?.tick ?? 0}</div>
+            <div className="text-sm text-slate-300">Mode: {state?.mode ?? "—"}</div>
+            <div className="text-sm text-slate-300">Wave: {state?.wave ?? 0}</div>
             <div className="text-sm text-slate-300">HP: {self ? `${self.hp}/${self.maxHp}` : "—"}</div>
-            <div className="text-sm text-slate-300">Zombies Alive: {aliveZombies}</div>
+            <div className="text-sm text-slate-300">Terminators Active: {aliveZombies}</div>
             <div className="text-sm text-slate-300">
               CAI Companion:{" "}
               {state?.companion
@@ -808,7 +810,7 @@ export function GameView() {
                 : "off"}
             </div>
             <div className="text-sm text-slate-300">Party Mode: {party ? `${party.members.length}/4` : "No active party"}</div>
-            {state?.status === "won" ? <div className="text-emerald-400 font-medium">You survived. Zombies cleared.</div> : null}
+            {state?.status === "won" ? <div className="text-emerald-400 font-medium">You survived. Terminator wave cleared.</div> : null}
             {state?.status === "lost" ? <div className="text-rose-400 font-medium">All survivors are down.</div> : null}
           </div>
 

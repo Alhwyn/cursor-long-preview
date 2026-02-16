@@ -51,16 +51,15 @@ const PLAYER_ATTACK_COOLDOWN = 2;
 const NORMAL_ZOMBIE_HP = 70;
 const NORMAL_ZOMBIE_DAMAGE = 12;
 const NORMAL_ZOMBIE_COOLDOWN = 2;
-const FAST_ZOMBIE_HP = 52;
-const FAST_ZOMBIE_DAMAGE = 10;
-const FAST_ZOMBIE_COOLDOWN = 1;
+const FLYING_TERMINATOR_HP = 52;
+const FLYING_TERMINATOR_DAMAGE = 10;
+const FLYING_TERMINATOR_COOLDOWN = 1;
 const EXPLOSIVE_ZOMBIE_HP = 46;
 const EXPLOSIVE_ZOMBIE_DAMAGE = 14;
 const EXPLOSIVE_ZOMBIE_COOLDOWN = 2;
-const GIANT_ZOMBIE_HP = 210;
-const GIANT_ZOMBIE_DAMAGE = 30;
-const GIANT_ZOMBIE_COOLDOWN = 3;
-const ZOMBIE_ATTACK_RANGE = 1;
+const MECH_TERMINATOR_HP = 210;
+const MECH_TERMINATOR_DAMAGE = 30;
+const MECH_TERMINATOR_COOLDOWN = 3;
 const EXPLOSION_DAMAGE = 140;
 const EXPLOSION_SPLASH_RADIUS = 1;
 const AGENT_ID = "cai-agent";
@@ -219,13 +218,13 @@ function validateAttackCooldown(lastAttackTick: number, cooldownTicks: number, c
 function pickZombieTarget(state: GameState, actor: Player, targetId?: string): Zombie {
   const aliveZombies = findAliveZombies(state);
   if (aliveZombies.length === 0) {
-    throw new GameRuleError("NO_ZOMBIES", "There are no living zombies to attack.");
+    throw new GameRuleError("NO_ZOMBIES", "There are no living terminators to attack.");
   }
 
   if (targetId) {
     const explicitTarget = state.zombies[targetId];
     if (!explicitTarget || !explicitTarget.alive) {
-      throw new GameRuleError("TARGET_NOT_FOUND", "Target zombie does not exist or is already dead.");
+      throw new GameRuleError("TARGET_NOT_FOUND", "Target terminator does not exist or is already destroyed.");
     }
     return explicitTarget;
   }
@@ -235,7 +234,7 @@ function pickZombieTarget(state: GameState, actor: Player, targetId?: string): Z
     .sort((a, b) => a.distance - b.distance || a.zombie.id.localeCompare(b.zombie.id))[0];
 
   if (!nearestZombie) {
-    throw new GameRuleError("TARGET_NOT_FOUND", "No valid zombie target was found.");
+    throw new GameRuleError("TARGET_NOT_FOUND", "No valid terminator target was found.");
   }
   return nearestZombie.zombie;
 }
@@ -253,13 +252,13 @@ function nextZombieNumericId(state: GameState): number {
 
 function zombieTypeForWaveSlot(wave: number, slot: number): ZombieType {
   if (wave >= 4 && slot % 8 === 0) {
-    return "giant";
+    return "mech";
   }
   if (wave >= 3 && slot % 5 === 0) {
     return "explosive";
   }
   if (wave >= 2 && slot % 3 === 0) {
-    return "fast";
+    return "flying";
   }
   return "normal";
 }
@@ -374,16 +373,18 @@ function deterministicJoinPlayerId(state: GameState): string {
   return `p-${index}`;
 }
 
-function zombieBaseStats(zombieType: ZombieType): { hp: number; damage: number; cooldown: number } {
+function zombieBaseStats(
+  zombieType: ZombieType,
+): { hp: number; damage: number; cooldown: number; range: number; ignoresWalls: boolean } {
   switch (zombieType) {
     case "normal":
-      return { hp: NORMAL_ZOMBIE_HP, damage: NORMAL_ZOMBIE_DAMAGE, cooldown: NORMAL_ZOMBIE_COOLDOWN };
-    case "fast":
-      return { hp: FAST_ZOMBIE_HP, damage: FAST_ZOMBIE_DAMAGE, cooldown: FAST_ZOMBIE_COOLDOWN };
+      return { hp: NORMAL_ZOMBIE_HP, damage: NORMAL_ZOMBIE_DAMAGE, cooldown: NORMAL_ZOMBIE_COOLDOWN, range: 3, ignoresWalls: false };
+    case "flying":
+      return { hp: FLYING_TERMINATOR_HP, damage: FLYING_TERMINATOR_DAMAGE, cooldown: FLYING_TERMINATOR_COOLDOWN, range: 1, ignoresWalls: true };
     case "explosive":
-      return { hp: EXPLOSIVE_ZOMBIE_HP, damage: EXPLOSIVE_ZOMBIE_DAMAGE, cooldown: EXPLOSIVE_ZOMBIE_COOLDOWN };
-    case "giant":
-      return { hp: GIANT_ZOMBIE_HP, damage: GIANT_ZOMBIE_DAMAGE, cooldown: GIANT_ZOMBIE_COOLDOWN };
+      return { hp: EXPLOSIVE_ZOMBIE_HP, damage: EXPLOSIVE_ZOMBIE_DAMAGE, cooldown: EXPLOSIVE_ZOMBIE_COOLDOWN, range: 1, ignoresWalls: false };
+    case "mech":
+      return { hp: MECH_TERMINATOR_HP, damage: MECH_TERMINATOR_DAMAGE, cooldown: MECH_TERMINATOR_COOLDOWN, range: 2, ignoresWalls: false };
     default:
       return assertNever(zombieType);
   }
@@ -399,7 +400,7 @@ function createZombie(zombieId: string, position: Vec2, zombieType: ZombieType):
     maxHp: stats.hp,
     alive: true,
     attackDamage: stats.damage,
-    attackRange: ZOMBIE_ATTACK_RANGE,
+    attackRange: stats.range,
     attackCooldownTicks: stats.cooldown,
     lastAttackTick: -stats.cooldown,
   };
@@ -451,6 +452,7 @@ function candidateZombieMoveDirections(zombie: Zombie, target: Player | Companio
 }
 
 function tryMoveZombie(state: GameState, zombie: Zombie, target: Player | CompanionAgent): boolean {
+  const zombieStats = zombieBaseStats(zombie.zombieType);
   for (const direction of candidateZombieMoveDirections(zombie, target)) {
     const offset = directionOffset(direction);
     const candidatePosition: Vec2 = {
@@ -458,7 +460,11 @@ function tryMoveZombie(state: GameState, zombie: Zombie, target: Player | Compan
       y: zombie.position.y + offset.y,
     };
 
-    if (!isPassable(state.map, candidatePosition)) {
+    const candidateTile = tileAt(state.map, candidatePosition);
+    if (!candidateTile) {
+      continue;
+    }
+    if (!zombieStats.ignoresWalls && candidateTile.type !== "grass") {
       continue;
     }
     if (isOccupiedByLivingEntity(state, candidatePosition, zombie.id)) {
@@ -518,7 +524,7 @@ function resolveZombieTurn(state: GameState): void {
       continue;
     }
 
-    const movementSteps = zombie.zombieType === "fast" ? 2 : zombie.zombieType === "giant" ? (state.tick % 2 === 0 ? 1 : 0) : 1;
+    const movementSteps = zombie.zombieType === "flying" ? 2 : zombie.zombieType === "mech" ? (state.tick % 2 === 0 ? 1 : 0) : 1;
     for (let step = 0; step < movementSteps; step += 1) {
       const moved = tryMoveZombie(state, zombie, nearestPlayer.player);
       if (!moved) {
@@ -697,7 +703,7 @@ function resolveAction(state: GameState, playerId: string, action: Action): void
     const target = pickZombieTarget(state, player, action.targetId);
     const distance = manhattanDistance(player.position, target.position);
     if (distance > player.attackRange) {
-      throw new GameRuleError("TARGET_OUT_OF_RANGE", "Target zombie is out of attack range.");
+      throw new GameRuleError("TARGET_OUT_OF_RANGE", "Target terminator is out of attack range.");
     }
 
     applyDamageToZombie(state, target.id, player.attackDamage);
@@ -778,7 +784,7 @@ function resolveCompanionSpawn(map: GameMap, occupiedKeys: Set<string>): Vec2 {
 export function createInitialGameState(input: CreateStateInput): { state: GameState; player: Player } {
   const sessionId = input.sessionId;
   const serverId = input.serverId;
-  const mode = input.mode ?? "classic";
+  const mode = input.mode ?? "endless";
   const playerId = input.playerId ?? deterministicInitialPlayerId(sessionId);
   const playerName = input.playerName?.trim() || "Survivor-1";
   const requestedZombieCount = input.zombieCount ?? DEFAULT_ZOMBIE_POSITIONS.length;

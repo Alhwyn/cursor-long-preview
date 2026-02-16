@@ -79,19 +79,19 @@ function drawEntity(
   isDead: boolean,
 ): void {
   const bodyWidth = entity.kind === "player" ? 16 : entity.kind === "agent" ? 18 : 14;
-  const baseZombieSize = entity.zombieType === "giant" ? 22 : entity.zombieType === "fast" ? 12 : 14;
+  const baseZombieSize = entity.zombieType === "mech" ? 22 : entity.zombieType === "flying" ? 12 : 14;
   const bodyHeight =
-    entity.kind === "player" ? 22 : entity.kind === "agent" ? 20 : entity.zombieType === "giant" ? 28 : 18;
+    entity.kind === "player" ? 22 : entity.kind === "agent" ? 20 : entity.zombieType === "mech" ? 28 : 18;
   const fill =
     entity.kind === "player"
       ? "#5eead4"
       : entity.kind === "agent"
         ? "#fde68a"
-        : entity.zombieType === "fast"
+        : entity.zombieType === "flying"
           ? "#f59e0b"
           : entity.zombieType === "explosive"
             ? "#f97316"
-            : entity.zombieType === "giant"
+            : entity.zombieType === "mech"
               ? "#dc2626"
               : "#fb7185";
   const resolvedBodyWidth = entity.kind === "zombie" ? baseZombieSize : bodyWidth;

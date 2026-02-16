@@ -1,6 +1,6 @@
-# RPC Zombie Game Skill
+# RPC Terminator Siege Skill
 
-Use this skill when an agent needs to play or test the RPC zombie game through HTTP endpoints.
+Use this skill when an agent needs to play or test the RPC terminator-siege game through HTTP endpoints.
 
 ## Goal
 
@@ -68,8 +68,8 @@ Leverage CAI companion support when enabled (combat-capable in-session agent all
 
 ## Action Strategy Hint
 
-- Prefer attacking when nearest zombie distance is `<= 1`.
-- Otherwise move along axis indicated by nearest zombie `(dx, dy)`.
+- Prefer attacking when nearest terminator distance is `<= 1`.
+- Otherwise move along axis indicated by nearest terminator `(dx, dy)`.
 - Respect cooldown conflicts (`ATTACK_COOLDOWN`) by sending `wait` or movement.
 
 ## References

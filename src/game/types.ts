@@ -48,7 +48,7 @@ export interface Zombie extends CombatStats {
   lastAttackTick: number;
 }
 
-export type ZombieType = "normal" | "fast" | "explosive" | "giant";
+export type ZombieType = "normal" | "flying" | "explosive" | "mech";
 
 export interface CompanionAgent extends CombatStats {
   id: string;

@@ -1,4 +1,4 @@
-# RPC Zombie Game Reference
+# RPC Terminator Siege Reference
 
 ## Endpoint Index
 
@@ -112,7 +112,7 @@ curl -s -X POST http://127.0.0.1:3000/api/party/start \
 - `SESSION_NOT_FOUND` -> restart flow from `/api/game/join`.
 - `SESSION_SERVER_MISMATCH` -> remove conflicting `serverId` or rejoin via the correct server flow.
 - `PLAYER_NOT_FOUND` -> player/session mismatch; refresh from join response.
-- `TARGET_NOT_FOUND` -> retry attack without `targetId` or refresh observation to choose a valid zombie id.
+- `TARGET_NOT_FOUND` -> retry attack without `targetId` or refresh observation to choose a valid terminator id.
 - `INVALID_ZOMBIE_COUNT` -> retry join with integer `zombieCount` in `[1, 32]`.
 - `INVALID_FIELD` -> check field types and ensure optional IDs (`session`, `serverId`, `playerId`, `targetId`) are non-empty strings when supplied (surrounding whitespace is trimmed by server).
 - `MISSING_SERVER_ID` -> ensure `POST /api/servers/:id/join` includes a non-empty `:id` path segment; surrounding whitespace is trimmed by server.
@@ -130,7 +130,7 @@ curl -s -X POST http://127.0.0.1:3000/api/party/start \
 
 ## Observation-driven movement heuristic
 
-Given `nearestZombie.dx` and `nearestZombie.dy`:
+Given `nearestZombie.dx` and `nearestZombie.dy` (nearest terminator vector):
 
 - if `abs(dx) >= abs(dy)`, prioritize horizontal move:
   - `dx > 0` => `right`

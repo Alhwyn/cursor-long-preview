@@ -1,6 +1,6 @@
-# RPC Zombie Game API
+# RPC Terminator Siege API
 
-This service is a **server-authoritative** zombie game simulation.  
+This service is a **server-authoritative** terminator-siege simulation.  
 Clients send intents; the server validates, mutates canonical state, advances ticks, and returns snapshots.
 
 ## Response Envelope
@@ -48,7 +48,7 @@ Request:
 }
 ```
 
-`zombieCount` must be an integer from `1` to `32`.
+`zombieCount` must be an integer from `1` to `32` (legacy field name; controls terminator count).
 `agentEnabled` is optional boolean (when true on new session, spawns CAI combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
@@ -103,7 +103,7 @@ Response:
 
 ### `GET /api/game/observe?session=<sessionId>&player=<playerId>`
 
-Get compact, player-centric observation payload.
+Get compact, player-centric observation payload including nearest terminator data.
 
 `player` is optional; when omitted, first player in session is used.
 If provided, `player` must be a non-empty string.
@@ -174,7 +174,7 @@ Request:
 Action schema:
 
 - `{"type":"move","direction":"up"|"down"|"left"|"right"}`
-- `{"type":"attack","targetId":"optional-zombie-id"}` (`targetId` must be non-empty when provided)
+- `{"type":"attack","targetId":"optional-terminator-id"}` (`targetId` must be non-empty when provided)
 - `{"type":"wait"}`
 
 `session` and `playerId` are required non-empty strings and are trimmed before lookup.
@@ -488,3 +488,4 @@ Use this stream for party/lobby sync and in-match state push updates.
 4. Every player marks ready via `POST /api/party/ready`.
 5. Leader starts via `POST /api/party/start`.
 6. Players send actions through `/api/game/action`; party stream pushes `session_state` updates.
+7. Endless mode supports terminator archetypes: `normal` (ranged), `flying`, `explosive`, `mech`.

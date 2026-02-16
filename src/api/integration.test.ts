@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { Direction } from "../game/types";
 
 interface RunningServer {
   process: Bun.Subprocess<"ignore", "pipe", "pipe">;
@@ -1222,27 +1223,71 @@ describe("RPC API integration (fallback mode)", () => {
 
     let inRange = false;
     for (let step = 0; step < 80; step++) {
-      const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session: sessionId }),
-      });
-      const tickPayload = await tickResponse.json();
-      expect(tickResponse.status).toBe(200);
-      expect(tickPayload.ok).toBe(true);
-
       const observeResponse = await fetch(
         `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
       );
       const observePayload = await observeResponse.json();
       expect(observeResponse.status).toBe(200);
       expect(observePayload.ok).toBe(true);
-      const nearestDistance = observePayload.data.observation.nearestZombie?.distance as number | undefined;
+      const nearestZombie = observePayload.data.observation.nearestZombie as
+        | { distance: number; dx: number; dy: number }
+        | undefined;
+      const nearestDistance = nearestZombie?.distance;
 
       if (nearestDistance !== undefined && nearestDistance <= 1) {
         inRange = true;
         break;
       }
+
+      if (!nearestZombie) {
+        break;
+      }
+
+      const primaryDirection: Direction =
+        Math.abs(nearestZombie.dx) >= Math.abs(nearestZombie.dy)
+          ? nearestZombie.dx > 0
+            ? "right"
+            : "left"
+          : nearestZombie.dy > 0
+            ? "down"
+            : "up";
+      const secondaryDirection: Direction | null =
+        primaryDirection === "left" || primaryDirection === "right"
+          ? nearestZombie.dy === 0
+            ? null
+            : nearestZombie.dy > 0
+              ? "down"
+              : "up"
+          : nearestZombie.dx === 0
+            ? null
+            : nearestZombie.dx > 0
+              ? "right"
+              : "left";
+
+      const tryMove = async (direction: Direction) => {
+        const response = await fetch(`${baseUrl}/api/game/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session: sessionId,
+            playerId,
+            action: { type: "move", direction },
+          }),
+        });
+        const payload = await response.json();
+        return { response, payload };
+      };
+
+      let moveAttempt = await tryMove(primaryDirection);
+      if (
+        moveAttempt.response.status === 409 &&
+        (moveAttempt.payload.error.code === "MOVE_BLOCKED" || moveAttempt.payload.error.code === "MOVE_OCCUPIED") &&
+        secondaryDirection
+      ) {
+        moveAttempt = await tryMove(secondaryDirection);
+      }
+      expect(moveAttempt.response.status).toBe(200);
+      expect(moveAttempt.payload.ok).toBe(true);
     }
 
     expect(inRange).toBe(true);

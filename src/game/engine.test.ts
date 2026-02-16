@@ -8,6 +8,7 @@ function makeState(): GameState {
     playerId: "p-1",
     playerName: "Tester",
     zombieCount: 1,
+    mode: "classic",
   });
   return state;
 }
@@ -59,8 +60,10 @@ describe("engine", () => {
     expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of attack range");
   });
 
-  test("zombie moves toward nearest player on tick", () => {
+  test("explosive terminator moves toward nearest player on tick", () => {
     const state = makeState();
+    state.zombies["z-1"]!.zombieType = "explosive";
+    state.zombies["z-1"]!.attackRange = 1;
     state.zombies["z-1"]!.position = { x: 4, y: 2 };
     const ticked = tickGame(state);
     expect(ticked.zombies["z-1"]?.position).toEqual({ x: 3, y: 2 });
@@ -79,6 +82,16 @@ describe("engine", () => {
 
     const tick3 = tickGame(tick2);
     expect(tick3.players["p-1"]?.hp).toBe(96);
+  });
+
+  test("normal terminator shoots from range without moving into melee", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.zombieType = "normal";
+    state.zombies["z-1"]!.position = { x: 5, y: 2 };
+
+    const ticked = tickGame(state);
+    expect(ticked.players["p-1"]?.hp).toBe(108);
+    expect(ticked.zombies["z-1"]?.position).toEqual({ x: 5, y: 2 });
   });
 
   test("game status flips to won when final zombie dies", () => {
@@ -210,9 +223,9 @@ describe("engine", () => {
     expect(["attack", "hurt"]).toContain(companionEmote);
   });
 
-  test("fast zombie can move two tiles in one tick", () => {
+  test("flying terminator can move two tiles in one tick", () => {
     const state = makeState();
-    state.zombies["z-1"]!.zombieType = "fast";
+    state.zombies["z-1"]!.zombieType = "flying";
     state.zombies["z-1"]!.position = { x: 6, y: 2 };
 
     const ticked = tickGame(state);
@@ -238,9 +251,9 @@ describe("engine", () => {
     expect(afterAttack.players["p-1"]?.hp).toBeLessThan(afterAttack.players["p-1"]!.maxHp);
   });
 
-  test("giant zombies move only on even ticks", () => {
+  test("mech terminators move only on even ticks", () => {
     const state = makeState();
-    state.zombies["z-1"]!.zombieType = "giant";
+    state.zombies["z-1"]!.zombieType = "mech";
     state.zombies["z-1"]!.position = { x: 6, y: 2 };
 
     const firstTick = tickGame(state);

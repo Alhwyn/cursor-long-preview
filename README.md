@@ -1,12 +1,17 @@
-# RPC Zombie Game (Bun + React)
+# RPC Terminator Siege Game (Bun + React)
 
-Server-authoritative zombie survival game with:
+Server-authoritative terminator survival game with:
 
 - deterministic game engine
 - RPC gameplay endpoints
 - 4-player party lifecycle APIs (create/join/ready/start/leave)
 - realtime SSE party/session updates
 - optional CAI combat companion agent (enabled by default for party starts)
+- endless wave mode with terminator archetypes:
+  - normal (ranged shooter),
+  - flying (fast mobility),
+  - explosive (death splash),
+  - mech (giant heavy unit)
 - in-memory session/lobby management
 - optional Supabase-backed lobby/auth mode
 - React isometric canvas client + HUD + observation panel
