@@ -117,6 +117,16 @@ export function optionalNumber(value: unknown, field: string): number | undefine
   return value;
 }
 
+export function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new HttpError(400, "INVALID_FIELD", `Field "${field}" must be a boolean when provided.`);
+  }
+  return value;
+}
+
 export function queryString(url: URL, key: string): string {
   const value = url.searchParams.get(key);
   if (!value || value.trim().length === 0) {

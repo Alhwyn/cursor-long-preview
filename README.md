@@ -6,6 +6,7 @@ Server-authoritative zombie survival game with:
 - RPC gameplay endpoints
 - 4-player party lifecycle APIs (create/join/ready/start/leave)
 - realtime SSE party/session updates
+- optional CAI combat companion agent (enabled by default for party starts)
 - in-memory session/lobby management
 - optional Supabase-backed lobby/auth mode
 - React isometric canvas client + HUD + observation panel

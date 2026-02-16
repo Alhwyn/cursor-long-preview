@@ -12,6 +12,17 @@ function makeState(): GameState {
   return state;
 }
 
+function makeStateWithAgent(): GameState {
+  const { state } = createInitialGameState({
+    sessionId: "session-agent",
+    playerId: "p-1",
+    playerName: "Tester",
+    zombieCount: 1,
+    agentEnabled: true,
+  });
+  return state;
+}
+
 describe("engine", () => {
   test("move action advances tick and updates position", () => {
     const state = makeState();
@@ -173,5 +184,29 @@ describe("engine", () => {
     const state = makeState();
     state.status = "lost";
     expect(() => tickGame(state)).toThrow("already completed");
+  });
+
+  test("agent-enabled state includes CAI companion and observation data", () => {
+    const state = makeStateWithAgent();
+    expect(state.companion).toBeDefined();
+    expect(state.companion?.name).toBe("CAI");
+
+    const observation = toObservation(state, "p-1");
+    expect(observation.companion).toBeDefined();
+    expect(observation.companion?.kind).toBe("agent");
+    expect(observation.entities.some(entity => entity.kind === "agent")).toBe(true);
+  });
+
+  test("companion attacks nearby zombie during tick", () => {
+    const state = makeStateWithAgent();
+    state.zombies["z-1"]!.position = { x: 4, y: 2 };
+    state.companion!.position = { x: 3, y: 2 };
+    state.companion!.lastAttackTick = -99;
+
+    const ticked = tickGame(state);
+    expect(ticked.zombies["z-1"]?.hp).toBe(48);
+    expect(ticked.companion).toBeDefined();
+    const companionEmote = ticked.companion!.emote;
+    expect(["attack", "hurt"]).toContain(companionEmote);
   });
 });

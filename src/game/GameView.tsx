@@ -801,6 +801,12 @@ export function GameView() {
             <div className="text-sm text-slate-300">Tick: {state?.tick ?? 0}</div>
             <div className="text-sm text-slate-300">HP: {self ? `${self.hp}/${self.maxHp}` : "—"}</div>
             <div className="text-sm text-slate-300">Zombies Alive: {aliveZombies}</div>
+            <div className="text-sm text-slate-300">
+              CAI Companion:{" "}
+              {state?.companion
+                ? `${state.companion.alive ? "active" : "down"} (${state.companion.hp}/${state.companion.maxHp}) • ${state.companion.emote}`
+                : "off"}
+            </div>
             <div className="text-sm text-slate-300">Party Mode: {party ? `${party.members.length}/4` : "No active party"}</div>
             {state?.status === "won" ? <div className="text-emerald-400 font-medium">You survived. Zombies cleared.</div> : null}
             {state?.status === "lost" ? <div className="text-rose-400 font-medium">All survivors are down.</div> : null}

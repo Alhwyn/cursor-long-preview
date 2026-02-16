@@ -2188,6 +2188,8 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.ok).toBe(true);
     expect(startPayload.data.party.status).toBe("in_game");
     expect(Object.keys(startPayload.data.state.players).length).toBe(4);
+    expect(startPayload.data.state.companion).toBeDefined();
+    expect(startPayload.data.state.companion.name).toBe("CAI");
 
     const stateResponse = await fetch(`${baseUrl}/api/party/state?partyId=${encodeURIComponent(partyId)}`);
     const statePayload = await stateResponse.json();
@@ -2195,6 +2197,7 @@ describe("RPC API integration (fallback mode)", () => {
     expect(statePayload.ok).toBe(true);
     expect(statePayload.data.party.sessionId).toBe(startPayload.data.sessionId);
     expect(Object.keys(statePayload.data.state.players).length).toBe(4);
+    expect(statePayload.data.state.companion).toBeDefined();
   });
 
   test("party leave transfers leader and cleans up empty party", async () => {

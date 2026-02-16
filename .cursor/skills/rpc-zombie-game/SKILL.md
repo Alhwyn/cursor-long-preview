@@ -5,6 +5,7 @@ Use this skill when an agent needs to play or test the RPC zombie game through H
 ## Goal
 
 Drive the server-authoritative simulation through API actions without direct state mutation.
+Leverage CAI companion support when enabled (combat-capable in-session agent ally).
 
 ## Preconditions
 
@@ -44,6 +45,7 @@ Drive the server-authoritative simulation through API actions without direct sta
 5. Leader starts match:
    - `POST /api/party/start`
 6. Play through `/api/game/action`; consume `session_state` events from SSE.
+7. Expect CAI companion in state/observation when `agentEnabled` is true (default for party starts).
 
 ### Important session/server constraints
 

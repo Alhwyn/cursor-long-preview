@@ -43,11 +43,13 @@ Request:
   "session": "optional-existing-session-id",
   "playerId": "optional-player-id",
   "serverId": "optional-server-id",
-  "zombieCount": 4
+  "zombieCount": 4,
+  "agentEnabled": true
 }
 ```
 
 `zombieCount` must be an integer from `1` to `32`.
+`agentEnabled` is optional boolean (when true on new session, spawns CAI combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
 If `playerId` is omitted:
@@ -132,6 +134,16 @@ Observation shape:
     "x": 6,
     "y": 3,
     "hp": 70,
+    "alive": true
+  },
+  "companion": {
+    "id": "cai-agent",
+    "kind": "agent",
+    "name": "CAI",
+    "x": 3,
+    "y": 2,
+    "hp": 180,
+    "maxHp": 180,
     "alive": true
   },
   "players": [],
@@ -395,7 +407,8 @@ Request:
 {
   "partyId": "party-...",
   "playerId": "party-player-1",
-  "zombieCount": 6
+  "zombieCount": 6,
+  "agentEnabled": true
 }
 ```
 
@@ -403,6 +416,7 @@ Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.
 - `409 PARTY_NOT_READY` when not all members are ready.
 - `200` with `sessionId` + full starting `state` on success.
+- `agentEnabled` defaults to `true` for party starts, so CAI companion joins unless explicitly disabled.
 
 ---
 

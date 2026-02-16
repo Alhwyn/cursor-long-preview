@@ -4,6 +4,7 @@ import {
   error,
   HttpError,
   ok,
+  optionalBoolean,
   optionalNonEmptyString,
   optionalNumber,
   optionalString,
@@ -80,6 +81,10 @@ describe("api/http helpers", () => {
     expect(optionalNumber(undefined, "count")).toBeUndefined();
     expect(optionalNumber(3, "count")).toBe(3);
     expect(() => optionalNumber(NaN, "count")).toThrow('Field "count" must be a finite number');
+
+    expect(optionalBoolean(undefined, "enabled")).toBeUndefined();
+    expect(optionalBoolean(true, "enabled")).toBe(true);
+    expect(() => optionalBoolean("yes", "enabled")).toThrow('Field "enabled" must be a boolean');
   });
 
   test("optionalNonEmptyString rejects blank values when provided", () => {

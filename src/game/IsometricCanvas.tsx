@@ -78,9 +78,9 @@ function drawEntity(
   centerY: number,
   isDead: boolean,
 ): void {
-  const bodyWidth = entity.kind === "player" ? 16 : 14;
-  const bodyHeight = entity.kind === "player" ? 22 : 18;
-  const fill = entity.kind === "player" ? "#5eead4" : "#fb7185";
+  const bodyWidth = entity.kind === "player" ? 16 : entity.kind === "agent" ? 18 : 14;
+  const bodyHeight = entity.kind === "player" ? 22 : entity.kind === "agent" ? 20 : 18;
+  const fill = entity.kind === "player" ? "#5eead4" : entity.kind === "agent" ? "#fde68a" : "#fb7185";
   const deadFill = "#6b7280";
   const px = centerX - bodyWidth / 2;
   const py = centerY - bodyHeight - 18;
@@ -99,6 +99,12 @@ function drawEntity(
   ctx.fillStyle = isDead ? "#475569" : "#0f172a";
   ctx.fillRect(px + 2, py + 5, bodyWidth - 4, 2);
   ctx.fillRect(px + 2, py + bodyHeight - 4, bodyWidth - 4, 2);
+  if (entity.kind === "agent" && !isDead) {
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(px + 3, py + 8, 2, 2);
+    ctx.fillRect(px + bodyWidth - 5, py + 8, 2, 2);
+    ctx.fillRect(px + Math.floor(bodyWidth / 2) - 2, py + 13, 4, 2);
+  }
 
   // HP bar
   ctx.fillStyle = "#0f172a";
@@ -124,8 +130,16 @@ export function IsometricCanvas({ state, width = 920, height = 560 }: IsometricC
       ...entity,
       kind: "zombie" as const,
     }));
+    const companion = state.companion
+      ? [
+          {
+            ...state.companion,
+            kind: "agent" as const,
+          },
+        ]
+      : [];
 
-    return [...players, ...zombies].sort((a, b) => {
+    return [...players, ...zombies, ...companion].sort((a, b) => {
       const depthA = a.position.x + a.position.y;
       const depthB = b.position.x + b.position.y;
       if (depthA !== depthB) {

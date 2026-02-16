@@ -14,6 +14,7 @@ interface CreateSessionInput {
   playerId?: string;
   playerName?: string;
   zombieCount?: number;
+  agentEnabled?: boolean;
 }
 
 interface JoinSessionInput {
@@ -64,6 +65,7 @@ export function createSession(input: CreateSessionInput): { session: SessionReco
     playerId: input.playerId,
     playerName: input.playerName,
     zombieCount: input.zombieCount,
+    agentEnabled: input.agentEnabled,
   });
 
   const session = writeSession(sessionId, state, input.serverId);

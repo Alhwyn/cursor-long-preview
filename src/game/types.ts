@@ -46,6 +46,17 @@ export interface Zombie extends CombatStats {
   lastAttackTick: number;
 }
 
+export interface CompanionAgent extends CombatStats {
+  id: string;
+  name: string;
+  position: Vec2;
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  lastAttackTick: number;
+  emote: "idle" | "focus" | "attack" | "hurt";
+}
+
 export type Action =
   | {
       type: "move";
@@ -69,11 +80,12 @@ export interface GameState {
   map: GameMap;
   players: Record<string, Player>;
   zombies: Record<string, Zombie>;
+  companion?: CompanionAgent;
 }
 
 export interface ObservationEntity {
   id: string;
-  kind: "player" | "zombie";
+  kind: "player" | "zombie" | "agent";
   name?: string;
   x: number;
   y: number;
@@ -102,6 +114,7 @@ export interface Observation {
   nearestZombie: NearestZombieInfo | null;
   players: ObservationEntity[];
   zombies: ObservationEntity[];
+  companion?: ObservationEntity;
   entities: ObservationEntity[];
 }
 

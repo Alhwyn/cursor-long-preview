@@ -104,7 +104,7 @@ curl -s -X POST http://127.0.0.1:3000/api/party/ready \
 
 curl -s -X POST http://127.0.0.1:3000/api/party/start \
   -H "Content-Type: application/json" \
-  -d '{"partyId":"<PARTY>","playerId":"<LEADER>"}'
+  -d '{"partyId":"<PARTY>","playerId":"<LEADER>","agentEnabled":true}'
 ```
 
 ## Error-to-Action Guidance
@@ -126,6 +126,7 @@ curl -s -X POST http://127.0.0.1:3000/api/party/start \
 - `UNAUTHORIZED` / `FORBIDDEN` -> refresh bearer token in enabled mode (`UNAUTHORIZED` also covers missing/non-Bearer auth headers; Bearer scheme parsing is case-insensitive).
 - In enabled mode, auth validation runs before JSON body parsing on `POST /api/servers`.
 - For realtime sync, open `GET /api/realtime/stream` (SSE) after joining/creating party.
+- CAI companion appears in `state.companion` / `observation.companion` when enabled and will attack zombies autonomously.
 
 ## Observation-driven movement heuristic
 

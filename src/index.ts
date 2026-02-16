@@ -4,6 +4,7 @@ import {
   asHttpError,
   HttpError,
   ok,
+  optionalBoolean,
   optionalNonEmptyString,
   optionalNumber,
   optionalString,
@@ -171,6 +172,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
   const playerName = optionalString(body.playerName, "playerName");
   const serverId = optionalNonEmptyString(body.serverId, "serverId");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled");
 
   try {
     if (existingSessionId) {
@@ -223,6 +225,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
       playerId,
       playerName,
       zombieCount,
+      agentEnabled,
     });
 
     if (serverId) {
@@ -543,6 +546,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
   const partyId = requireString(body.partyId, "partyId");
   const playerId = requireString(body.playerId, "playerId");
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled") ?? true;
 
   let startedParty: PartyState | null = null;
 
@@ -562,6 +566,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
       playerId: leaderMember.playerId,
       playerName: leaderMember.playerName,
       zombieCount,
+      agentEnabled,
     });
 
     for (const member of activeParty.members) {
