@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import RaycastShooterCanvas from "./RaycastShooterCanvas";
 import type { Action, GameState, Observation, PartyState } from "./types";
+import HudPanel from "./components/HudPanel";
+import ShooterControls from "./components/ShooterControls";
 
 interface ApiError {
   code: string;
@@ -644,95 +646,18 @@ export function GameView() {
 
           <RaycastShooterCanvas state={state} focusPlayerId={playerId} />
 
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <h2 className="font-semibold text-lg mb-3">Shooter Controls</h2>
-            <div className="grid grid-cols-3 gap-2 max-w-[280px]">
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "move", direction: "up" })}
-                className="col-start-2 rounded bg-slate-800 hover:bg-slate-700 px-3 py-2"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "move", direction: "left" })}
-                className="rounded bg-slate-800 hover:bg-slate-700 px-3 py-2"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "wait" })}
-                className="rounded bg-slate-700 hover:bg-slate-600 px-3 py-2"
-              >
-                Wait
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "move", direction: "right" })}
-                className="rounded bg-slate-800 hover:bg-slate-700 px-3 py-2"
-              >
-                →
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "move", direction: "down" })}
-                className="col-start-2 rounded bg-slate-800 hover:bg-slate-700 px-3 py-2"
-              >
-                ↓
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-3">
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "shoot" })}
-                className="rounded bg-rose-500 hover:bg-rose-400 text-slate-950 font-medium px-4 py-2"
-              >
-                Shoot Forward
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "attack" })}
-                className="rounded bg-orange-400 hover:bg-orange-300 text-slate-950 font-medium px-4 py-2"
-              >
-                Attack Nearest
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "build", buildType: "barricade", direction: self?.facing ?? "up" })}
-                className="rounded bg-violet-400 hover:bg-violet-300 text-slate-950 font-medium px-4 py-2"
-              >
-                Build Barricade
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "build", buildType: "ally_robot", direction: self?.facing ?? "up" })}
-                className="rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-medium px-4 py-2"
-              >
-                Deploy Helper Bot
-              </button>
-              <button
-                type="button"
-                onClick={() => void sendAction({ type: "build", buildType: "turret", direction: self?.facing ?? "up" })}
-                className="rounded bg-fuchsia-400 hover:bg-fuchsia-300 text-slate-950 font-medium px-4 py-2"
-              >
-                Build Turret
-              </button>
-              <button type="button" onClick={() => void tick()} className="rounded bg-indigo-500 hover:bg-indigo-400 px-4 py-2">
-                Manual Tick
-              </button>
-              <button type="button" onClick={() => void refreshState()} className="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2">
-                Refresh
-              </button>
-            </div>
-            <div className="mt-3 text-xs text-slate-400">
-              Keyboard: <span className="text-slate-200">WASD / Arrows</span> move,{" "}
-              <span className="text-slate-200">Space</span> shoot, <span className="text-slate-200">F</span> attack nearest,{" "}
-              <span className="text-slate-200">1/2/3</span> build, <span className="text-slate-200">Enter</span> wait.
-            </div>
-          </div>
+          <ShooterControls
+            onAction={action => {
+              void sendAction(action);
+            }}
+            onTick={() => {
+              void tick();
+            }}
+            onRefresh={() => {
+              void refreshState();
+            }}
+            facing={self?.facing}
+          />
         </section>
 
         <section className="space-y-4">
@@ -839,29 +764,7 @@ export function GameView() {
             ) : null}
           </div>
 
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-2">
-            <h2 className="font-semibold text-lg">HUD</h2>
-            <div className="text-sm text-slate-300">Status: {state?.status ?? "idle"}</div>
-            <div className="text-sm text-slate-300">Tick: {state?.tick ?? 0}</div>
-            <div className="text-sm text-slate-300">Mode: {state?.mode ?? "—"}</div>
-            <div className="text-sm text-slate-300">Wave: {state?.wave ?? 0}</div>
-            <div className="text-sm text-slate-300">Map: {state ? `${state.map.width}×${state.map.height}` : "—"}</div>
-            <div className="text-sm text-slate-300">Scrap: {state?.scrap ?? 0}</div>
-            <div className="text-sm text-slate-300">Built Robots: {state ? Object.values(state.builtRobots).filter(robot => robot.alive).length : 0}</div>
-            <div className="text-sm text-slate-300">Turrets: {state ? Object.values(state.turrets).filter(turret => turret.alive).length : 0}</div>
-            <div className="text-sm text-slate-300">HP: {self ? `${self.hp}/${self.maxHp}` : "—"}</div>
-            <div className="text-sm text-slate-300">Facing: {self?.facing ?? "—"}</div>
-            <div className="text-sm text-slate-300">Terminators Active: {aliveTerminators}</div>
-            <div className="text-sm text-slate-300">
-              Claude Bot Companion:{" "}
-              {state?.companion
-                ? `${state.companion.alive ? "active" : "down"} (${state.companion.hp}/${state.companion.maxHp}) • ${state.companion.emote}`
-                : "off"}
-            </div>
-            <div className="text-sm text-slate-300">Party Mode: {party ? `${party.members.length}/4` : "No active party"}</div>
-            {state?.status === "won" ? <div className="text-emerald-400 font-medium">You survived. Terminator robot wave cleared.</div> : null}
-            {state?.status === "lost" ? <div className="text-rose-400 font-medium">All survivors are down.</div> : null}
-          </div>
+          <HudPanel state={state} self={self} aliveTerminators={aliveTerminators} partyMemberCount={party?.members.length} />
 
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
             <h2 className="font-semibold text-lg">Servers ({supabaseMode})</h2>
