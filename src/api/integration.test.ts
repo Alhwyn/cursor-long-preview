@@ -678,6 +678,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
   });
 
+  test("fractional terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalTerminatorCount",
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
   test("terminatorCount alias is accepted for session creation", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -708,6 +727,44 @@ describe("RPC API integration (fallback mode)", () => {
         playerName: "MismatchedCountsJoin",
         zombieCount: 2,
         terminatorCount: 3,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("out-of-range terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "OutOfRangeTerminatorCount",
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("non-number terminatorCount is rejected with INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidTerminatorCountType",
+        terminatorCount: "4",
       }),
     });
     const payload = await response.json();

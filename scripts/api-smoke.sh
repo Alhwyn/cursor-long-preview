@@ -13,6 +13,15 @@ terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-terminator-cou
 mismatched_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-mismatched-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"MismatchedCountsSmoke","zombieCount":2,"terminatorCount":3}')"
+fractional_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"FractionalTerminatorCountSmoke","terminatorCount":1.5}')"
+out_of_range_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-out-of-range-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"OutOfRangeTerminatorCountSmoke","terminatorCount":33}')"
+string_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-string-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"StringTerminatorCountSmoke","terminatorCount":"4"}')"
 
 action_status="$(curl -sS -o /tmp/rpc-zombie-smoke-action.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/action" \
   -H "Content-Type: application/json" \
@@ -171,15 +180,27 @@ duplicate_join_one_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-on
 duplicate_join_two_status="$(curl -sS -o /tmp/rpc-zombie-smoke-duplicate-join-two.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/${duplicate_server_id}/join" -H "Content-Type: application/json" -d '{"playerId":"dupe-smoke","playerName":"DupeB"}')"
 missing_server_status="$(curl -sS -o /tmp/rpc-zombie-smoke-missing-server.json -w "%{http_code}" -X POST "${BASE_URL}/api/servers/does-not-exist/join" -H "Content-Type: application/json" -d '{"playerName":"Ghost"}')"
 
-python3 - <<'PY' "${terminator_count_join_status}" "${mismatched_count_join_status}"
+python3 - <<'PY' "${terminator_count_join_status}" "${mismatched_count_join_status}" "${fractional_terminator_count_join_status}" "${out_of_range_terminator_count_join_status}" "${string_terminator_count_join_status}"
 import json
 import pathlib
 import sys
 
 terminator_count_join_status = int(sys.argv[1])
 mismatched_count_join_status = int(sys.argv[2])
+fractional_terminator_count_join_status = int(sys.argv[3])
+out_of_range_terminator_count_join_status = int(sys.argv[4])
+string_terminator_count_join_status = int(sys.argv[5])
 terminator_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-terminator-count-join.json").read_text())
 mismatched_count_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-mismatched-count-join.json").read_text())
+fractional_terminator_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-fractional-terminator-count-join.json").read_text()
+)
+out_of_range_terminator_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-terminator-count-join.json").read_text()
+)
+string_terminator_count_join_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-string-terminator-count-join.json").read_text()
+)
 
 assert terminator_count_join_status == 201, (
     f"terminatorCount join should be 201, got {terminator_count_join_status}"
@@ -196,6 +217,38 @@ assert mismatched_count_join_payload["ok"] is False, "mismatched count join payl
 assert mismatched_count_join_payload["error"]["code"] == "INVALID_FIELD", (
     "mismatched count join code mismatch: "
     f"{mismatched_count_join_payload['error']['code']}"
+)
+
+assert fractional_terminator_count_join_status == 400, (
+    f"fractional terminatorCount join should be 400, got {fractional_terminator_count_join_status}"
+)
+assert fractional_terminator_count_join_payload["ok"] is False, (
+    "fractional terminatorCount join payload should be failure"
+)
+assert fractional_terminator_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "fractional terminatorCount join code mismatch: "
+    f"{fractional_terminator_count_join_payload['error']['code']}"
+)
+
+assert out_of_range_terminator_count_join_status == 400, (
+    "out-of-range terminatorCount join should be 400, "
+    f"got {out_of_range_terminator_count_join_status}"
+)
+assert out_of_range_terminator_count_join_payload["ok"] is False, (
+    "out-of-range terminatorCount join payload should be failure"
+)
+assert out_of_range_terminator_count_join_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "out-of-range terminatorCount join code mismatch: "
+    f"{out_of_range_terminator_count_join_payload['error']['code']}"
+)
+
+assert string_terminator_count_join_status == 400, (
+    f"string terminatorCount join should be 400, got {string_terminator_count_join_status}"
+)
+assert string_terminator_count_join_payload["ok"] is False, "string terminatorCount join payload should be failure"
+assert string_terminator_count_join_payload["error"]["code"] == "INVALID_FIELD", (
+    "string terminatorCount join code mismatch: "
+    f"{string_terminator_count_join_payload['error']['code']}"
 )
 PY
 
