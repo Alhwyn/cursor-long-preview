@@ -385,6 +385,24 @@ describe("engine", () => {
     expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-1" })).toThrow("out of weapon range");
   });
 
+  test("shoot out-of-range target does not fallback to directional in-range target", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-target-priority",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+    state.zombies["z-2"]!.position = { x: 12, y: 2 };
+
+    expect(() =>
+      applyAction(state, "p-1", { type: "shoot", targetId: "z-2", direction: "right" }),
+    ).toThrow("out of weapon range");
+    expect(state.zombies["z-1"]?.hp).toBe(70);
+  });
+
   test("shoot miss still consumes cooldown", () => {
     const state = makeState();
     state.players["p-1"]!.facing = "left";

@@ -1513,7 +1513,7 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observePayload.ok).toBe(true);
     const self = observePayload.data.observation.self as { x: number; y: number };
     const zombies = observePayload.data.observation.zombies as Array<{ id: string; x: number; y: number }>;
-    const outOfRangeZombie = zombies.find(zombie => Math.abs(zombie.x - self.x) + Math.abs(zombie.y - self.y) > 4);
+    const outOfRangeZombie = zombies.find(zombie => Math.abs(zombie.x - self.x) + Math.abs(zombie.y - self.y) > 8);
     expect(outOfRangeZombie).toBeDefined();
 
     const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
@@ -1523,6 +1523,46 @@ describe("RPC API integration (fallback mode)", () => {
         session: sessionId,
         playerId,
         action: { type: "shoot", targetId: `  ${outOfRangeZombie!.id}  ` },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(409);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+  });
+
+  test("shoot explicit out-of-range target with direction returns TARGET_OUT_OF_RANGE", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "OutOfRangeShootDirection" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const observePayload = await observeResponse.json();
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    const self = observePayload.data.observation.self as { x: number; y: number };
+    const zombies = observePayload.data.observation.zombies as Array<{ id: string; x: number; y: number }>;
+    const outOfRangeZombie = zombies.find(zombie => Math.abs(zombie.x - self.x) + Math.abs(zombie.y - self.y) > 8);
+    expect(outOfRangeZombie).toBeDefined();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: outOfRangeZombie!.id, direction: "up" },
       }),
     });
     const shootPayload = await shootResponse.json();
