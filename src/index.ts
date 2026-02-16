@@ -225,6 +225,22 @@ function parseGameMode(value: unknown): "classic" | "endless" | undefined {
 function parseTerminatorCount(body: Record<string, unknown>): number | undefined {
   const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
   const terminatorCount = optionalNumber(body.terminatorCount, "terminatorCount");
+  const validateCount = (value: number | undefined, fieldName: "zombieCount" | "terminatorCount"): void => {
+    if (value === undefined) {
+      return;
+    }
+    if (!Number.isInteger(value) || value < 1 || value > 32) {
+      throw new HttpError(
+        400,
+        "INVALID_ZOMBIE_COUNT",
+        `Field "${fieldName}" must be an integer between 1 and 32 when provided.`,
+      );
+    }
+  };
+
+  validateCount(zombieCount, "zombieCount");
+  validateCount(terminatorCount, "terminatorCount");
+
   if (zombieCount !== undefined && terminatorCount !== undefined && zombieCount !== terminatorCount) {
     throw new HttpError(
       400,

@@ -52,6 +52,7 @@ out_of_range_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-out-o
 string_count_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-string-count-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"terminatorCount\":\"4\"}")"
 invalid_zombiecount_with_valid_terminatorcount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-zombiecount-with-valid-terminatorcount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":\"2\",\"terminatorCount\":2}")"
 invalid_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-invalid-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":\"2\"}")"
+out_of_range_terminatorcount_with_valid_zombiecount_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-out-of-range-terminatorcount-with-valid-zombiecount-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":33}")"
 start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${party_id}\",\"playerId\":\"${leader_player_id}\",\"zombieCount\":2,\"terminatorCount\":2}")"
 session_id="$(python3 -c 'import json,pathlib; print(json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())["data"]["sessionId"])')"
 agent_key_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-key.json -w "%{http_code}" -X POST "${BASE_URL}/api/agent/access-key" -H "Content-Type: application/json" -d "{\"session\":\"${session_id}\",\"playerId\":\"${leader_player_id}\"}")"
@@ -115,7 +116,7 @@ python3 - <<'PY' \
   "${join_two_status}" "${join_three_status}" "${join_four_status}" "${overflow_join_status}" \
   "${non_leader_start_status}" "${not_ready_start_status}" \
   "${ready_one_status}" "${ready_two_status}" "${ready_three_status}" "${ready_four_status}" \
-  "${mismatched_count_start_status}" "${fractional_count_start_status}" "${out_of_range_count_start_status}" "${string_count_start_status}" "${invalid_zombiecount_with_valid_terminatorcount_start_status}" "${invalid_terminatorcount_with_valid_zombiecount_start_status}" \
+  "${mismatched_count_start_status}" "${fractional_count_start_status}" "${out_of_range_count_start_status}" "${string_count_start_status}" "${invalid_zombiecount_with_valid_terminatorcount_start_status}" "${invalid_terminatorcount_with_valid_zombiecount_start_status}" "${out_of_range_terminatorcount_with_valid_zombiecount_start_status}" \
   "${start_status}" "${agent_key_status}" "${agent_join_status}" "${agent_reuse_status}" "${party_state_status}"
 import json
 import pathlib
@@ -138,11 +139,12 @@ out_of_range_count_start_status = int(sys.argv[14])
 string_count_start_status = int(sys.argv[15])
 invalid_zombiecount_with_valid_terminatorcount_start_status = int(sys.argv[16])
 invalid_terminatorcount_with_valid_zombiecount_start_status = int(sys.argv[17])
-start_status = int(sys.argv[18])
-agent_key_status = int(sys.argv[19])
-agent_join_status = int(sys.argv[20])
-agent_reuse_status = int(sys.argv[21])
-party_state_status = int(sys.argv[22])
+out_of_range_terminatorcount_with_valid_zombiecount_start_status = int(sys.argv[18])
+start_status = int(sys.argv[19])
+agent_key_status = int(sys.argv[20])
+agent_join_status = int(sys.argv[21])
+agent_reuse_status = int(sys.argv[22])
+party_state_status = int(sys.argv[23])
 
 overflow_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-overflow-join.json").read_text())
 non_leader_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-nonleader-start.json").read_text())
@@ -156,6 +158,9 @@ invalid_zombiecount_with_valid_terminatorcount_start_payload = json.loads(
 )
 invalid_terminatorcount_with_valid_zombiecount_start_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-party-invalid-terminatorcount-with-valid-zombiecount-start.json").read_text()
+)
+out_of_range_terminatorcount_with_valid_zombiecount_start_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-party-out-of-range-terminatorcount-with-valid-zombiecount-start.json").read_text()
 )
 start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-start.json").read_text())
 agent_key_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-agent-key.json").read_text())
@@ -237,6 +242,17 @@ assert invalid_terminatorcount_with_valid_zombiecount_start_payload["ok"] is Fal
 assert invalid_terminatorcount_with_valid_zombiecount_start_payload["error"]["code"] == "INVALID_FIELD", (
     "unexpected invalid terminatorCount with valid zombieCount start code: "
     f"{invalid_terminatorcount_with_valid_zombiecount_start_payload['error']['code']}"
+)
+assert out_of_range_terminatorcount_with_valid_zombiecount_start_status == 400, (
+    "party start with out-of-range terminatorCount and valid zombieCount should be 400, "
+    f"got {out_of_range_terminatorcount_with_valid_zombiecount_start_status}"
+)
+assert out_of_range_terminatorcount_with_valid_zombiecount_start_payload["ok"] is False, (
+    "out-of-range terminatorCount with valid zombieCount start payload should fail"
+)
+assert out_of_range_terminatorcount_with_valid_zombiecount_start_payload["error"]["code"] == "INVALID_ZOMBIE_COUNT", (
+    "unexpected out-of-range terminatorCount with valid zombieCount start code: "
+    f"{out_of_range_terminatorcount_with_valid_zombiecount_start_payload['error']['code']}"
 )
 
 assert start_status == 200, f"party start should be 200, got {start_status}"
