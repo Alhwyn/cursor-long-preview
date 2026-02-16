@@ -58,6 +58,56 @@ agent_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-join.json -w 
 agent_reuse_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-agent-reuse.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" -H "Content-Type: application/json" -d "{\"accessKey\":\"${agent_access_key}\",\"playerName\":\"SmokeAgentReuse\"}")"
 party_state_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-state.json -w "%{http_code}" "${BASE_URL}/api/party/state?partyId=${party_id}")"
 
+legacy_alias_create_payload="$(curl -sS -X POST "${BASE_URL}/api/party/create" -H "Content-Type: application/json" -d '{"playerName":"LegacyAliasLeader"}')"
+legacy_alias_party_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["party"]["partyId"])' <<< "${legacy_alias_create_payload}")"
+legacy_alias_player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["player"]["playerId"])' <<< "${legacy_alias_create_payload}")"
+legacy_alias_ready_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-legacy-alias-ready.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${legacy_alias_party_id}\",\"playerId\":\"${legacy_alias_player_id}\",\"ready\":true}")"
+legacy_alias_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-legacy-alias-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${legacy_alias_party_id}\",\"playerId\":\"${legacy_alias_player_id}\",\"zombieCount\":2,\"agentEnabled\":false}")"
+
+terminator_alias_create_payload="$(curl -sS -X POST "${BASE_URL}/api/party/create" -H "Content-Type: application/json" -d '{"playerName":"TerminatorAliasLeader"}')"
+terminator_alias_party_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["party"]["partyId"])' <<< "${terminator_alias_create_payload}")"
+terminator_alias_player_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["player"]["playerId"])' <<< "${terminator_alias_create_payload}")"
+terminator_alias_ready_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-terminator-alias-ready.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/ready" -H "Content-Type: application/json" -d "{\"partyId\":\"${terminator_alias_party_id}\",\"playerId\":\"${terminator_alias_player_id}\",\"ready\":true}")"
+terminator_alias_start_status="$(curl -sS -o /tmp/rpc-zombie-smoke-party-terminator-alias-start.json -w "%{http_code}" -X POST "${BASE_URL}/api/party/start" -H "Content-Type: application/json" -d "{\"partyId\":\"${terminator_alias_party_id}\",\"playerId\":\"${terminator_alias_player_id}\",\"terminatorCount\":2,\"agentEnabled\":false}")"
+
+python3 - <<'PY' \
+  "${legacy_alias_create_payload}" "${legacy_alias_ready_status}" "${legacy_alias_start_status}" \
+  "${terminator_alias_create_payload}" "${terminator_alias_ready_status}" "${terminator_alias_start_status}"
+import json
+import pathlib
+import sys
+
+legacy_alias_create_payload = json.loads(sys.argv[1])
+legacy_alias_ready_status = int(sys.argv[2])
+legacy_alias_start_status = int(sys.argv[3])
+terminator_alias_create_payload = json.loads(sys.argv[4])
+terminator_alias_ready_status = int(sys.argv[5])
+terminator_alias_start_status = int(sys.argv[6])
+
+legacy_alias_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-legacy-alias-start.json").read_text())
+terminator_alias_start_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-party-terminator-alias-start.json").read_text())
+
+assert legacy_alias_create_payload["ok"] is True, "legacy alias party create should succeed"
+assert legacy_alias_ready_status == 200, f"legacy alias ready should be 200, got {legacy_alias_ready_status}"
+assert legacy_alias_start_status == 200, f"legacy alias start should be 200, got {legacy_alias_start_status}"
+assert legacy_alias_start_payload["ok"] is True, "legacy alias start payload should succeed"
+assert len(legacy_alias_start_payload["data"]["state"]["zombies"]) == 2, (
+    "legacy alias start should initialize two terminators"
+)
+
+assert terminator_alias_create_payload["ok"] is True, "terminator alias party create should succeed"
+assert terminator_alias_ready_status == 200, (
+    f"terminator alias ready should be 200, got {terminator_alias_ready_status}"
+)
+assert terminator_alias_start_status == 200, (
+    f"terminator alias start should be 200, got {terminator_alias_start_status}"
+)
+assert terminator_alias_start_payload["ok"] is True, "terminator alias start payload should succeed"
+assert len(terminator_alias_start_payload["data"]["state"]["zombies"]) == 2, (
+    "terminator alias start should initialize two terminators"
+)
+PY
+
 python3 - <<'PY' \
   "${create_party_payload}" \
   "${join_two_status}" "${join_three_status}" "${join_four_status}" "${overflow_join_status}" \
