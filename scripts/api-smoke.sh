@@ -49,6 +49,9 @@ null_zombiecount_without_terminatorcount_status="$(curl -sS -o /tmp/rpc-zombie-s
 null_terminatorcount_without_zombiecount_status="$(curl -sS -o /tmp/rpc-zombie-smoke-null-terminatorcount-without-zombiecount.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"NullTerminatorCountWithoutZombieCountSmoke","terminatorCount":null}')"
+both_null_count_aliases_status="$(curl -sS -o /tmp/rpc-zombie-smoke-both-null-count-aliases.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
+  -H "Content-Type: application/json" \
+  -d '{"playerName":"BothNullCountAliasesSmoke","zombieCount":null,"terminatorCount":null}')"
 fractional_terminator_count_join_status="$(curl -sS -o /tmp/rpc-zombie-smoke-fractional-terminator-count-join.json -w "%{http_code}" -X POST "${BASE_URL}/api/game/join" \
   -H "Content-Type: application/json" \
   -d '{"playerName":"FractionalTerminatorCountSmoke","terminatorCount":1.5}')"
@@ -537,7 +540,7 @@ assert string_terminator_count_join_payload["error"]["code"] == "INVALID_FIELD",
 )
 PY
 
-python3 - <<'PY' "${null_zombiecount_with_valid_terminatorcount_status}" "${null_terminatorcount_with_valid_zombiecount_status}" "${null_zombiecount_without_terminatorcount_status}" "${null_terminatorcount_without_zombiecount_status}"
+python3 - <<'PY' "${null_zombiecount_with_valid_terminatorcount_status}" "${null_terminatorcount_with_valid_zombiecount_status}" "${null_zombiecount_without_terminatorcount_status}" "${null_terminatorcount_without_zombiecount_status}" "${both_null_count_aliases_status}"
 import json
 import pathlib
 import sys
@@ -546,6 +549,7 @@ null_zombiecount_with_valid_terminatorcount_status = int(sys.argv[1])
 null_terminatorcount_with_valid_zombiecount_status = int(sys.argv[2])
 null_zombiecount_without_terminatorcount_status = int(sys.argv[3])
 null_terminatorcount_without_zombiecount_status = int(sys.argv[4])
+both_null_count_aliases_status = int(sys.argv[5])
 null_zombiecount_with_valid_terminatorcount_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-null-zombiecount-with-valid-terminatorcount.json").read_text()
 )
@@ -557,6 +561,9 @@ null_zombiecount_without_terminatorcount_payload = json.loads(
 )
 null_terminatorcount_without_zombiecount_payload = json.loads(
     pathlib.Path("/tmp/rpc-zombie-smoke-null-terminatorcount-without-zombiecount.json").read_text()
+)
+both_null_count_aliases_payload = json.loads(
+    pathlib.Path("/tmp/rpc-zombie-smoke-both-null-count-aliases.json").read_text()
 )
 
 assert null_zombiecount_with_valid_terminatorcount_status == 400, (
@@ -602,6 +609,17 @@ assert null_terminatorcount_without_zombiecount_payload["ok"] is False, (
 assert null_terminatorcount_without_zombiecount_payload["error"]["code"] == "INVALID_FIELD", (
     "null terminatorCount without zombieCount join code mismatch: "
     f"{null_terminatorcount_without_zombiecount_payload['error']['code']}"
+)
+assert both_null_count_aliases_status == 400, (
+    "both null zombieCount and terminatorCount join should be 400, "
+    f"got {both_null_count_aliases_status}"
+)
+assert both_null_count_aliases_payload["ok"] is False, (
+    "both null count aliases join payload should fail"
+)
+assert both_null_count_aliases_payload["error"]["code"] == "INVALID_FIELD", (
+    "both null count aliases join code mismatch: "
+    f"{both_null_count_aliases_payload['error']['code']}"
 )
 PY
 
