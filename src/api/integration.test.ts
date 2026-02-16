@@ -1867,6 +1867,64 @@ describe("RPC API integration (fallback mode)", () => {
     expect(shootPayload.data.state.players[playerId].facing).not.toBe(oppositeDirection);
   });
 
+  test("shoot trimmed targetId takes precedence over provided direction in facing resolution", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootTrimmedTargetPrecedence", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 4,
+    });
+
+    expect(inRange).toBe(true);
+    const preShootObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preShootPayload = await preShootObserve.json();
+    expect(preShootObserve.status).toBe(200);
+    expect(preShootPayload.ok).toBe(true);
+    const nearestZombie = preShootPayload.data.observation.nearestZombie as
+      | { id: string; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
+    const oppositeDirection: Direction =
+      expectedFacing === "left"
+        ? "right"
+        : expectedFacing === "right"
+          ? "left"
+          : expectedFacing === "up"
+            ? "down"
+            : "up";
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: `  ${nearestZombie!.id}  `, direction: oppositeDirection },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe(expectedFacing);
+    expect(shootPayload.data.state.players[playerId].facing).not.toBe(oppositeDirection);
+  });
+
   test("out-of-range attack returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

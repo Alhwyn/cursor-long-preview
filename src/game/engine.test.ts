@@ -422,6 +422,16 @@ describe("engine", () => {
     expect(next.players["p-1"]?.facing).toBe("left");
   });
 
+  test("shoot trimmed targetId takes precedence over provided direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "  z-1  ", direction: "right" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("left");
+  });
+
   test("shoot with unknown explicit target is rejected", () => {
     const state = makeState();
 
