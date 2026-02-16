@@ -103,6 +103,39 @@ describe("RPC API integration (fallback mode)", () => {
     expect(statePayload.data.state.tick).toBeGreaterThanOrEqual(1);
   });
 
+  test("action response observation includes terminators alias parity", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ActionObserveAlias" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "wait" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(200);
+    expect(actionPayload.ok).toBe(true);
+    expect(actionPayload.data.observation.terminators).toHaveLength(actionPayload.data.observation.zombies.length);
+
+    const zombieIds = actionPayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
+    const terminatorIds = actionPayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
+    expect(terminatorIds).toEqual(zombieIds);
+  });
+
   test("join defaults player naming and deterministic ids when not provided", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

@@ -215,6 +215,7 @@ trimmed_route_server_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smo
 blank_route_server_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-blank-route-server-join.json").read_text())
 duplicate_join_one_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-one.json").read_text())
 duplicate_join_two_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-duplicate-join-two.json").read_text())
+action_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-action.json").read_text())
 out_of_range_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-out-of-range-attack.json").read_text())
 unknown_target_attack_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-unknown-target-attack.json").read_text())
 missing_state_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-missing-state.json").read_text())
@@ -236,6 +237,12 @@ trimmed_session_join_payload = json.loads(pathlib.Path("/tmp/rpc-zombie-smoke-tr
 assert join_payload["ok"] is True, "join failed"
 assert servers_payload["ok"] is True, "server list failed"
 assert action_status == 200, f"move action status unexpected: {action_status}"
+assert action_payload["ok"] is True, "move action payload should be success"
+action_zombie_ids = [entity["id"] for entity in action_payload["data"]["observation"]["zombies"]]
+action_terminator_ids = [entity["id"] for entity in action_payload["data"]["observation"]["terminators"]]
+assert action_terminator_ids == action_zombie_ids, (
+    f"action observation alias mismatch: zombies={action_zombie_ids} terminators={action_terminator_ids}"
+)
 assert shoot_status == 200, f"shoot action status unexpected: {shoot_status}"
 assert out_of_range_attack_status == 409, f"out-of-range attack should be 409, got {out_of_range_attack_status}"
 assert unknown_target_attack_status == 404, f"unknown target attack should be 404, got {unknown_target_attack_status}"
