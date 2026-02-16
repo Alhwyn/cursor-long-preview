@@ -45,12 +45,24 @@ describe("engine", () => {
   test("attack applies damage and enforces cooldown", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
+    state.players["p-1"]!.facing = "left";
 
     const afterAttack = applyAction(state, "p-1", { type: "attack" });
     expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
     expect(afterAttack.tick).toBe(1);
+    expect(afterAttack.players["p-1"]?.facing).toBe("right");
 
     expect(() => applyAction(afterAttack, "p-1", { type: "attack" })).toThrow("cooldown");
+  });
+
+  test("attack with explicit target updates facing toward target", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
+    expect(afterAttack.players["p-1"]?.facing).toBe("left");
   });
 
   test("attack out of range is rejected", () => {
