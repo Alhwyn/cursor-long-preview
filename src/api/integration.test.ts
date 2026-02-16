@@ -1567,6 +1567,24 @@ describe("RPC API integration (fallback mode)", () => {
     }
 
     expect(inRange).toBe(true);
+    const preAttackObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preAttackObservePayload = await preAttackObserve.json();
+    expect(preAttackObserve.status).toBe(200);
+    expect(preAttackObservePayload.ok).toBe(true);
+    const nearestZombie = preAttackObservePayload.data.observation.nearestZombie as
+      | { distance: number; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const expectedFacing: Direction =
+      Math.abs(nearestZombie!.dx) >= Math.abs(nearestZombie!.dy)
+        ? nearestZombie!.dx >= 0
+          ? "right"
+          : "left"
+        : nearestZombie!.dy >= 0
+          ? "down"
+          : "up";
 
     const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
       method: "POST",
@@ -1580,6 +1598,7 @@ describe("RPC API integration (fallback mode)", () => {
     const firstAttackPayload = await firstAttack.json();
     expect(firstAttack.status).toBe(200);
     expect(firstAttackPayload.ok).toBe(true);
+    expect(firstAttackPayload.data.state.players[playerId].facing).toBe(expectedFacing);
 
     const secondAttack = await fetch(`${baseUrl}/api/game/action`, {
       method: "POST",
