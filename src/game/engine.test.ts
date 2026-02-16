@@ -364,6 +364,44 @@ describe("engine", () => {
     expect(afterBuild.zombies["z-1"]?.hp).toBeLessThan(70);
   });
 
+  test("build turret enforces active turret cap", () => {
+    const state = makeState();
+    state.scrap = 400;
+    state.players["p-1"]!.position = { x: 10, y: 10 };
+    state.zombies["z-1"]!.position = { x: 16, y: 16 };
+
+    for (const [tileX, tileY] of [
+      [11, 10],
+      [9, 10],
+      [10, 9],
+      [10, 11],
+    ]) {
+      const tile = state.map.tiles.find(candidate => candidate.x === tileX && candidate.y === tileY);
+      if (tile) {
+        tile.type = "grass";
+      }
+    }
+
+    const buildDirections = ["right", "left", "up", "down"] as const;
+    let current = state;
+    for (const direction of buildDirections) {
+      current = applyAction(current, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction,
+      });
+    }
+
+    expect(Object.values(current.turrets).filter(turret => turret.alive)).toHaveLength(4);
+    expect(() =>
+      applyAction(current, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction: "right",
+      }),
+    ).toThrow("Maximum 4 turrets");
+  });
+
   test("observation includes terminator alias and turrets", () => {
     const state = makeState();
     state.scrap = 200;
