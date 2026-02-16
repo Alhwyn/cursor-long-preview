@@ -1104,6 +1104,25 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("null zombieCount is rejected when terminatorCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithoutTerminatorCount",
+        zombieCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("invalid terminatorCount is rejected even when zombieCount is valid", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1134,6 +1153,25 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         playerName: "NullTerminatorCountWithValidZombieCount",
         zombieCount: 4,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount is rejected when zombieCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithoutZombieCount",
         terminatorCount: null,
       }),
     });
@@ -4475,6 +4513,30 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.error.code).toBe("INVALID_FIELD");
   });
 
+  test("party start rejects null zombieCount when terminatorCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithoutTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
   test("party start rejects invalid terminatorCount even when zombieCount is valid", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -4516,6 +4578,30 @@ describe("RPC API integration (fallback mode)", () => {
         partyId,
         playerId: leaderPlayerId,
         zombieCount: 2,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects null terminatorCount when zombieCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithoutZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
         terminatorCount: null,
       }),
     });
