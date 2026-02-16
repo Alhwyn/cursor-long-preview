@@ -11,6 +11,7 @@ import type {
   Observation,
   ObservationEntity,
   Player,
+  Turret,
   Vec2,
   Zombie,
   ZombieType,
@@ -46,9 +47,9 @@ const MAP_WIDTH = 36;
 const MAP_HEIGHT = 36;
 const PLAYER_START: Vec2 = { x: 2, y: 2 };
 const PLAYER_MAX_HP = 120;
-const PLAYER_DAMAGE = 28;
-const PLAYER_ATTACK_RANGE = 1;
-const PLAYER_ATTACK_COOLDOWN = 2;
+const PLAYER_DAMAGE = 26;
+const PLAYER_ATTACK_RANGE = 8;
+const PLAYER_ATTACK_COOLDOWN = 1;
 const NORMAL_ZOMBIE_HP = 70;
 const NORMAL_ZOMBIE_DAMAGE = 12;
 const NORMAL_ZOMBIE_COOLDOWN = 2;
@@ -64,7 +65,7 @@ const MECH_TERMINATOR_COOLDOWN = 3;
 const EXPLOSION_DAMAGE = 140;
 const EXPLOSION_SPLASH_RADIUS = 1;
 const AGENT_ID = "cai-agent";
-const AGENT_NAME = "CAI";
+const AGENT_NAME = "Claude Bot";
 const AGENT_MAX_HP = 180;
 const AGENT_DAMAGE = 22;
 const AGENT_ATTACK_RANGE = 1;
@@ -77,6 +78,12 @@ const BUILDER_ALLY_ROBOT_MAX_HP = 150;
 const BUILDER_ALLY_ROBOT_DAMAGE = 24;
 const BUILDER_ALLY_ROBOT_ATTACK_RANGE = 1;
 const BUILDER_ALLY_ROBOT_COOLDOWN = 1;
+const BUILDER_TURRET_COST = 60;
+const BUILDER_TURRET_MAX_ACTIVE = 4;
+const BUILDER_TURRET_MAX_HP = 130;
+const BUILDER_TURRET_DAMAGE = 18;
+const BUILDER_TURRET_ATTACK_RANGE = 7;
+const BUILDER_TURRET_COOLDOWN = 2;
 
 function scrapRewardForZombieType(zombieType: ZombieType): number {
   switch (zombieType) {
@@ -120,6 +127,7 @@ function cloneState(state: GameState): GameState {
     builtRobots: Object.fromEntries(
       Object.entries(state.builtRobots).map(([id, robot]) => [id, { ...robot, position: { ...robot.position } }]),
     ),
+    turrets: Object.fromEntries(Object.entries(state.turrets).map(([id, turret]) => [id, { ...turret, position: { ...turret.position } }])),
     companion: state.companion
       ? {
           ...state.companion,
@@ -201,12 +209,13 @@ function findAliveZombies(state: GameState): Zombie[] {
   return Object.values(state.zombies).filter(zombie => zombie.alive);
 }
 
-function findAliveDefenders(state: GameState): Array<Player | CompanionAgent> {
-  const defenders: Array<Player | CompanionAgent> = [...findAlivePlayers(state)];
+function findAliveDefenders(state: GameState): Array<Player | CompanionAgent | Turret> {
+  const defenders: Array<Player | CompanionAgent | Turret> = [...findAlivePlayers(state)];
   if (state.companion?.alive) {
     defenders.push(state.companion);
   }
   defenders.push(...Object.values(state.builtRobots).filter(robot => robot.alive));
+  defenders.push(...Object.values(state.turrets).filter(turret => turret.alive));
   return defenders;
 }
 
@@ -231,7 +240,9 @@ function isOccupiedByLivingEntity(state: GameState, position: Vec2, excludedEnti
       state.companion.alive &&
       state.companion.id !== excludedEntityId &&
       toTileKey(state.companion.position) === key,
-  ) || Object.values(state.builtRobots).some(robot => robot.alive && robot.id !== excludedEntityId && toTileKey(robot.position) === key);
+  ) ||
+    Object.values(state.builtRobots).some(robot => robot.alive && robot.id !== excludedEntityId && toTileKey(robot.position) === key) ||
+    Object.values(state.turrets).some(turret => turret.alive && turret.id !== excludedEntityId && toTileKey(turret.position) === key);
 }
 
 function ensureSessionIsActive(state: GameState): void {
@@ -279,6 +290,68 @@ function pickZombieTarget(state: GameState, actor: Player, targetId?: string): Z
     throw new GameRuleError("TARGET_NOT_FOUND", "No valid terminator target was found.");
   }
   return nearestZombie.zombie;
+}
+
+function findZombieInDirection(state: GameState, origin: Vec2, direction: Direction, maxRange: number): Zombie | null {
+  const delta = directionOffset(direction);
+  for (let step = 1; step <= maxRange; step += 1) {
+    const candidate: Vec2 = {
+      x: origin.x + delta.x * step,
+      y: origin.y + delta.y * step,
+    };
+    const tile = tileAt(state.map, candidate);
+    if (!tile || tile.type !== "grass") {
+      return null;
+    }
+    const hit = Object.values(state.zombies)
+      .filter(zombie => zombie.alive)
+      .find(zombie => zombie.position.x === candidate.x && zombie.position.y === candidate.y);
+    if (hit) {
+      return hit;
+    }
+  }
+  return null;
+}
+
+function directionToward(from: Vec2, to: Vec2): Direction {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? "right" : "left";
+  }
+  return dy >= 0 ? "down" : "up";
+}
+
+function resolvePlayerShoot(state: GameState, player: Player, action: Extract<Action, { type: "attack" | "shoot" }>): void {
+  validateAttackCooldown(player.lastAttackTick, player.attackCooldownTicks, state.tick, "Player");
+
+  let resolvedTarget: Zombie | null = null;
+  if (action.targetId) {
+    resolvedTarget = pickZombieTarget(state, player, action.targetId);
+    player.facing = directionToward(player.position, resolvedTarget.position);
+  } else {
+    const explicitDirection = action.type === "shoot" ? action.direction : undefined;
+    const direction = explicitDirection ?? player.facing;
+    const directionalTarget = findZombieInDirection(state, player.position, direction, player.attackRange);
+    if (directionalTarget) {
+      resolvedTarget = directionalTarget;
+      player.facing = direction;
+    } else if (action.type === "attack") {
+      resolvedTarget = pickZombieTarget(state, player);
+      player.facing = directionToward(player.position, resolvedTarget.position);
+    }
+  }
+
+  if (!resolvedTarget) {
+    throw new GameRuleError("TARGET_NOT_FOUND", "No terminator robot target found in firing line.");
+  }
+  const distance = manhattanDistance(player.position, resolvedTarget.position);
+  if (distance > player.attackRange) {
+    throw new GameRuleError("TARGET_OUT_OF_RANGE", "Target terminator robot is out of weapon range.");
+  }
+
+  applyDamageToZombie(state, resolvedTarget.id, player.attackDamage);
+  player.lastAttackTick = state.tick;
 }
 
 function nextZombieNumericId(state: GameState): number {
@@ -341,6 +414,9 @@ function spawnWave(state: GameState, wave: number, count: number): void {
     ...Object.values(state.builtRobots)
       .filter(robot => robot.alive)
       .map(robot => toTileKey(robot.position)),
+    ...Object.values(state.turrets)
+      .filter(turret => turret.alive)
+      .map(turret => toTileKey(turret.position)),
     ...(state.companion?.alive ? [toTileKey(state.companion.position)] : []),
   ]);
 
@@ -456,6 +532,7 @@ function createPlayer(playerId: string, playerName: string, position: Vec2): Pla
     id: playerId,
     name: playerName,
     position,
+    facing: "right",
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
     alive: true,
@@ -471,6 +548,7 @@ function createCompanion(position: Vec2): CompanionAgent {
     id: AGENT_ID,
     name: AGENT_NAME,
     position,
+    facing: "right",
     hp: AGENT_MAX_HP,
     maxHp: AGENT_MAX_HP,
     alive: true,
@@ -498,6 +576,7 @@ function createBuiltRobot(robotId: string, position: Vec2): CompanionAgent {
     id: robotId,
     name: "Guardian Bot",
     position,
+    facing: "right",
     hp: BUILDER_ALLY_ROBOT_MAX_HP,
     maxHp: BUILDER_ALLY_ROBOT_MAX_HP,
     alive: true,
@@ -506,6 +585,33 @@ function createBuiltRobot(robotId: string, position: Vec2): CompanionAgent {
     attackCooldownTicks: BUILDER_ALLY_ROBOT_COOLDOWN,
     lastAttackTick: -BUILDER_ALLY_ROBOT_COOLDOWN,
     emote: "idle",
+  };
+}
+
+function nextTurretId(state: GameState): string {
+  let maxId = 0;
+  for (const turretId of Object.keys(state.turrets)) {
+    const parsed = Number.parseInt(turretId.replace(/^turret-/, ""), 10);
+    if (Number.isInteger(parsed) && parsed > maxId) {
+      maxId = parsed;
+    }
+  }
+  return `turret-${maxId + 1}`;
+}
+
+function createTurret(turretId: string, position: Vec2, facing: Direction): Turret {
+  return {
+    id: turretId,
+    name: "Peachy Turret",
+    position,
+    facing,
+    hp: BUILDER_TURRET_MAX_HP,
+    maxHp: BUILDER_TURRET_MAX_HP,
+    alive: true,
+    attackDamage: BUILDER_TURRET_DAMAGE,
+    attackRange: BUILDER_TURRET_ATTACK_RANGE,
+    attackCooldownTicks: BUILDER_TURRET_COOLDOWN,
+    lastAttackTick: -BUILDER_TURRET_COOLDOWN,
   };
 }
 
@@ -549,7 +655,7 @@ function tryMoveZombie(state: GameState, zombie: Zombie, target: Player | Compan
   return false;
 }
 
-function zombieAttackDefender(zombie: Zombie, defender: Player | CompanionAgent, tick: number): void {
+function zombieAttackDefender(zombie: Zombie, defender: Player | CompanionAgent | Turret, tick: number): void {
   if (!defender.alive) {
     return;
   }
@@ -633,6 +739,7 @@ function tryMoveCompanion(state: GameState, companion: CompanionAgent, target: Z
       continue;
     }
     companion.position = candidatePosition;
+    companion.facing = direction;
     companion.emote = "focus";
     return;
   }
@@ -657,6 +764,10 @@ function resolveSingleAgentTurn(state: GameState, companion: CompanionAgent | un
       validateAttackCooldown(companion.lastAttackTick, companion.attackCooldownTicks, state.tick, "Companion");
       applyDamageToZombie(state, target.zombie.id, companion.attackDamage);
       companion.lastAttackTick = state.tick;
+      const primaryFacing = candidateCompanionMoveDirections(companion, target.zombie)[0];
+      if (primaryFacing) {
+        companion.facing = primaryFacing;
+      }
       companion.emote = "attack";
       return;
     } catch (error) {
@@ -680,6 +791,35 @@ function resolveBuiltRobotTurns(state: GameState): void {
 
   for (const robot of robots) {
     resolveSingleAgentTurn(state, robot);
+  }
+}
+
+function resolveTurretTurns(state: GameState): void {
+  const turrets = Object.values(state.turrets)
+    .filter(turret => turret.alive)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const turret of turrets) {
+    const nearestTarget = findAliveZombies(state)
+      .map(zombie => ({ zombie, distance: manhattanDistance(turret.position, zombie.position) }))
+      .filter(entry => entry.distance <= turret.attackRange)
+      .sort((a, b) => a.distance - b.distance || a.zombie.id.localeCompare(b.zombie.id))[0];
+
+    if (!nearestTarget) {
+      continue;
+    }
+
+    turret.facing = directionToward(turret.position, nearestTarget.zombie.position);
+
+    try {
+      validateAttackCooldown(turret.lastAttackTick, turret.attackCooldownTicks, state.tick, "Turret");
+      applyDamageToZombie(state, nearestTarget.zombie.id, turret.attackDamage);
+      turret.lastAttackTick = state.tick;
+    } catch (error) {
+      if (!(error instanceof GameRuleError) || error.code !== "ATTACK_COOLDOWN") {
+        throw error;
+      }
+    }
   }
 }
 
@@ -711,6 +851,17 @@ function applyExplosionDamageToDefenders(state: GameState, center: Vec2): void {
     robot.hp = Math.max(0, robot.hp - Math.ceil(EXPLOSION_DAMAGE * 0.3));
     robot.alive = robot.hp > 0;
     robot.emote = robot.alive ? "hurt" : "idle";
+  }
+
+  for (const turret of Object.values(state.turrets)) {
+    if (!turret.alive) {
+      continue;
+    }
+    if (manhattanDistance(turret.position, center) > EXPLOSION_SPLASH_RADIUS) {
+      continue;
+    }
+    turret.hp = Math.max(0, turret.hp - Math.ceil(EXPLOSION_DAMAGE * 0.3));
+    turret.alive = turret.hp > 0;
   }
 }
 
@@ -797,6 +948,9 @@ function applyBuildBarricade(state: GameState, player: Player, direction: Direct
 
   consumeScrap(state, BUILDER_BARRICADE_COST);
   tile.type = "wall";
+  if (state.companion?.alive) {
+    state.companion.emote = "build";
+  }
 }
 
 function applyBuildAllyRobot(state: GameState, player: Player, direction: Direction): void {
@@ -816,6 +970,32 @@ function applyBuildAllyRobot(state: GameState, player: Player, direction: Direct
   consumeScrap(state, BUILDER_ALLY_ROBOT_COST);
   const robotId = nextBuiltRobotId(state);
   state.builtRobots[robotId] = createBuiltRobot(robotId, targetPosition);
+  if (state.companion?.alive) {
+    state.companion.emote = "cheer";
+  }
+}
+
+function applyBuildTurret(state: GameState, player: Player, direction: Direction): void {
+  const activeTurrets = Object.values(state.turrets).filter(turret => turret.alive).length;
+  if (activeTurrets >= BUILDER_TURRET_MAX_ACTIVE) {
+    throw new GameRuleError("BUILD_LIMIT_REACHED", `Maximum ${BUILDER_TURRET_MAX_ACTIVE} turrets are already active.`);
+  }
+
+  const targetPosition = buildTargetPosition(player, direction);
+  if (!isPassable(state.map, targetPosition)) {
+    throw new GameRuleError("BUILD_BLOCKED", "Cannot deploy turret on blocked tile.");
+  }
+  if (isOccupiedByLivingEntity(state, targetPosition)) {
+    throw new GameRuleError("BUILD_OCCUPIED", "Cannot deploy turret on occupied tile.");
+  }
+
+  consumeScrap(state, BUILDER_TURRET_COST);
+  const turretId = nextTurretId(state);
+  state.turrets[turretId] = createTurret(turretId, targetPosition, direction);
+
+  if (state.companion?.alive) {
+    state.companion.emote = "build";
+  }
 }
 
 function applyBuildAction(state: GameState, player: Player, buildType: BuildType, direction: Direction): void {
@@ -825,6 +1005,9 @@ function applyBuildAction(state: GameState, player: Player, buildType: BuildType
       return;
     case "ally_robot":
       applyBuildAllyRobot(state, player, direction);
+      return;
+    case "turret":
+      applyBuildTurret(state, player, direction);
       return;
     default:
       assertNever(buildType);
@@ -854,23 +1037,17 @@ function resolveAction(state: GameState, playerId: string, action: Action): void
     }
 
     player.position = candidatePosition;
+    player.facing = action.direction;
     return;
   }
 
-  if (action.type === "attack") {
-    validateAttackCooldown(player.lastAttackTick, player.attackCooldownTicks, state.tick, "Player");
-    const target = pickZombieTarget(state, player, action.targetId);
-    const distance = manhattanDistance(player.position, target.position);
-    if (distance > player.attackRange) {
-      throw new GameRuleError("TARGET_OUT_OF_RANGE", "Target terminator is out of attack range.");
-    }
-
-    applyDamageToZombie(state, target.id, player.attackDamage);
-    player.lastAttackTick = state.tick;
+  if (action.type === "attack" || action.type === "shoot") {
+    resolvePlayerShoot(state, player, action);
     return;
   }
 
   if (action.type === "build") {
+    player.facing = action.direction;
     applyBuildAction(state, player, action.buildType, action.direction);
     return;
   }
@@ -899,6 +1076,9 @@ export function addPlayerToState({ state, playerId, playerName }: AddPlayerInput
     ...Object.values(state.builtRobots)
       .filter(robot => robot.alive)
       .map(robot => toTileKey(robot.position)),
+    ...Object.values(state.turrets)
+      .filter(turret => turret.alive)
+      .map(turret => toTileKey(turret.position)),
     ...(state.companion && state.companion.alive ? [toTileKey(state.companion.position)] : []),
   ]);
 
@@ -1003,6 +1183,7 @@ export function createInitialGameState(input: CreateStateInput): { state: GameSt
     zombies,
     companion,
     builtRobots: {},
+    turrets: {},
   };
 
   updateGameStatus(state);
@@ -1015,6 +1196,7 @@ export function tickGame(state: GameState): GameState {
   nextState.tick += 1;
   resolveCompanionTurn(nextState);
   resolveBuiltRobotTurns(nextState);
+  resolveTurretTurns(nextState);
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
   nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
@@ -1028,6 +1210,7 @@ export function applyAction(state: GameState, playerId: string, action: Action):
   nextState.tick += 1;
   resolveCompanionTurn(nextState);
   resolveBuiltRobotTurns(nextState);
+  resolveTurretTurns(nextState);
   resolveZombieTurn(nextState);
   updateGameStatus(nextState);
   nextState.updatedAt = nextStateTimestamp(nextState.updatedAt);
@@ -1073,6 +1256,19 @@ function companionToObservationEntity(companion: CompanionAgent): ObservationEnt
   };
 }
 
+function turretToObservationEntity(turret: Turret): ObservationEntity {
+  return {
+    id: turret.id,
+    kind: "turret",
+    name: turret.name,
+    x: turret.position.x,
+    y: turret.position.y,
+    hp: turret.hp,
+    maxHp: turret.maxHp,
+    alive: turret.alive,
+  };
+}
+
 export function toObservation(state: GameState, playerId: string): Observation {
   const player = state.players[playerId];
   if (!player) {
@@ -1087,6 +1283,9 @@ export function toObservation(state: GameState, playerId: string): Observation {
     .sort((a, b) => a.id.localeCompare(b.id));
   const builtRobots = Object.values(state.builtRobots)
     .map(robotEntity => companionToObservationEntity(robotEntity))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const turrets = Object.values(state.turrets)
+    .map(turretEntity => turretToObservationEntity(turretEntity))
     .sort((a, b) => a.id.localeCompare(b.id));
   const aliveZombieEntities = zombies.filter(zombie => zombie.alive);
   const companion = state.companion ? companionToObservationEntity(state.companion) : undefined;
@@ -1118,9 +1317,13 @@ export function toObservation(state: GameState, playerId: string): Observation {
     scrap: state.scrap,
     players,
     zombies,
+    terminators: zombies,
     companion,
     builtRobots,
-    entities: [...players, ...zombies, ...builtRobots, ...(companion ? [companion] : [])].sort((a, b) => a.id.localeCompare(b.id)),
+    turrets,
+    entities: [...players, ...zombies, ...builtRobots, ...turrets, ...(companion ? [companion] : [])].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
   };
 }
 

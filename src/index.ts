@@ -56,7 +56,7 @@ import type { Action, BuildType, Direction, PartyState, Player } from "./game/ty
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
-const VALID_BUILD_TYPES: ReadonlyArray<BuildType> = ["barricade", "ally_robot"];
+const VALID_BUILD_TYPES: ReadonlyArray<BuildType> = ["barricade", "ally_robot", "turret"];
 const VALID_GAME_MODES = ["classic", "endless"] as const;
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 
@@ -179,6 +179,19 @@ function parseActionBody(payload: Record<string, unknown>): Action {
     };
   }
 
+  if (actionType === "shoot") {
+    const targetId = optionalNonEmptyString(payload.targetId, "targetId");
+    const directionRaw = optionalString(payload.direction, "direction");
+    if (directionRaw && !VALID_DIRECTIONS.includes(directionRaw as Direction)) {
+      throw new HttpError(400, "INVALID_DIRECTION", `direction must be one of: ${VALID_DIRECTIONS.join(", ")}`);
+    }
+    return {
+      type: "shoot",
+      targetId,
+      direction: directionRaw as Direction | undefined,
+    };
+  }
+
   if (actionType === "build") {
     const buildTypeRaw = requireString(payload.buildType, "buildType");
     if (!VALID_BUILD_TYPES.includes(buildTypeRaw as BuildType)) {
@@ -195,7 +208,7 @@ function parseActionBody(payload: Record<string, unknown>): Action {
     };
   }
 
-  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "wait", "build".');
+  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "shoot", "wait", "build".');
 }
 
 function parseGameMode(value: unknown): "classic" | "endless" | undefined {
