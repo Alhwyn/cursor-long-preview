@@ -1,14 +1,4 @@
-interface LobbyServer {
-  id: string;
-  name: string;
-  description?: string;
-  isPublic: boolean;
-  maxPlayers: number;
-  currentPlayers: number;
-  createdBy?: string;
-  createdAt: number;
-  updatedAt: number;
-}
+import type { LobbyServer } from "../api";
 
 interface ServerBrowserPanelProps {
   supabaseMode: "enabled" | "disabled";

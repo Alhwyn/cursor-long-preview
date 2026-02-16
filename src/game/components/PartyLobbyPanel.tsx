@@ -1,9 +1,4 @@
-import type { PartyState } from "../types";
-
-interface PartySnapshot extends PartyState {
-  readyCount: number;
-  allReady: boolean;
-}
+import type { PartySnapshot } from "../api";
 
 interface PartyLobbyPanelProps {
   busy: boolean;

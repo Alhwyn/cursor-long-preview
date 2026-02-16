@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import RaycastShooterCanvas from "./RaycastShooterCanvas";
-import type { Action, GameState, Observation, PartyState } from "./types";
+import type { Action, GameState, Observation } from "./types";
+import {
+  request,
+  type CreateServerResponse,
+  type JoinGameResponse,
+  type JoinServerResponse,
+  type LobbyServer,
+  type ObserveResponse,
+  type PartyLeaveResponse,
+  type PartyResponse,
+  type PartySnapshot,
+  type PartyStartResponse,
+  type RealtimeEnvelope,
+  type ServersResponse,
+  type SessionStateResponse,
+} from "./api";
 import DirectSessionPanel from "./components/DirectSessionPanel";
 import HudPanel from "./components/HudPanel";
 import ObservationPanel from "./components/ObservationPanel";
@@ -8,119 +23,6 @@ import PartyLobbyPanel from "./components/PartyLobbyPanel";
 import ServerBrowserPanel from "./components/ServerBrowserPanel";
 import ShooterControls from "./components/ShooterControls";
 import SystemFeedPanel from "./components/SystemFeedPanel";
-
-interface ApiError {
-  code: string;
-  message: string;
-  details?: unknown;
-}
-
-interface ApiSuccess<T> {
-  ok: true;
-  data: T;
-}
-
-interface ApiFailure {
-  ok: false;
-  error: ApiError;
-}
-
-type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
-
-interface JoinGameResponse {
-  sessionId: string;
-  playerId: string;
-  playerName: string;
-  state: GameState;
-  observation: Observation;
-}
-
-interface SessionStateResponse {
-  sessionId: string;
-  state: GameState;
-}
-
-interface ObserveResponse {
-  sessionId: string;
-  playerId: string;
-  observation: Observation;
-}
-
-interface LobbyServer {
-  id: string;
-  name: string;
-  description?: string;
-  isPublic: boolean;
-  maxPlayers: number;
-  currentPlayers: number;
-  createdBy?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface ServersResponse {
-  mode: "enabled" | "disabled";
-  servers: LobbyServer[];
-}
-
-interface CreateServerResponse {
-  mode: "enabled" | "disabled";
-  server: LobbyServer;
-}
-
-interface JoinServerResponse {
-  sessionId: string;
-  playerId: string;
-  playerName: string;
-  state: GameState;
-  observation: Observation;
-  server: LobbyServer;
-}
-
-interface PartySnapshot extends PartyState {
-  readyCount: number;
-  allReady: boolean;
-}
-
-interface PartyResponse {
-  party: PartySnapshot;
-  player: {
-    playerId: string;
-    playerName: string;
-    ready: boolean;
-    joinedAt: number;
-  };
-}
-
-interface PartyStateResponse {
-  party: PartySnapshot;
-  state?: GameState;
-}
-
-interface PartyStartResponse {
-  party: PartySnapshot;
-  sessionId: string;
-  state: GameState;
-}
-
-interface PartyLeaveResponse {
-  party: PartySnapshot | null;
-}
-
-interface RealtimeEnvelope<T = unknown> {
-  type: string;
-  timestamp: number;
-  data: T;
-}
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const payload = (await response.json()) as ApiResponse<T>;
-  if (!payload.ok) {
-    throw new Error(`${payload.error.code}: ${payload.error.message}`);
-  }
-  return payload.data;
-}
 
 export function GameView() {
   const [sessionId, setSessionId] = useState<string>("");
