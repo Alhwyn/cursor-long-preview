@@ -38,6 +38,7 @@ Drive the server-authoritative simulation through API actions without direct sta
 - If target session belongs to a lobby server at max capacity, join returns `SERVER_FULL`.
 - Optional identifiers (`session`, `serverId`, `playerId`, observe `player`, attack `targetId`) must be non-empty strings when provided; blank strings return `INVALID_FIELD`.
 - Identifier values are trimmed server-side before lookup; `"  abc  "` is treated as `"abc"`.
+- Lobby join route identifiers are trimmed server-side too; `/api/servers/%20<id>%20/join` resolves to `<id>`, while blank route IDs return `MISSING_SERVER_ID`.
 
 ## Auth Behavior
 

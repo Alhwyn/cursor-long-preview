@@ -290,6 +290,7 @@ Request:
 
 `playerId` must be a non-empty string when provided.
 `playerId` values are trimmed before session join.
+Route parameter `:id` must be non-empty and is trimmed before server lookup.
 
 Response:
 
@@ -312,7 +313,7 @@ Response:
 ## Common Error Codes
 
 - `INVALID_JSON`, `INVALID_BODY`, `INVALID_FIELD`
-- `MISSING_QUERY`, `INVALID_ACTION`, `INVALID_DIRECTION`, `INVALID_ZOMBIE_COUNT`
+- `MISSING_QUERY`, `MISSING_SERVER_ID`, `INVALID_ACTION`, `INVALID_DIRECTION`, `INVALID_ZOMBIE_COUNT`
 - `SESSION_NOT_FOUND`, `SESSION_SERVER_MISMATCH`, `PLAYER_NOT_FOUND`, `TARGET_NOT_FOUND`, `SERVER_NOT_FOUND`
 - `PLAYER_DEAD`, `MOVE_BLOCKED`, `MOVE_OCCUPIED`, `TARGET_OUT_OF_RANGE`, `ATTACK_COOLDOWN`, `SERVER_FULL`, `GAME_COMPLETED`
 - `UNAUTHORIZED`, `FORBIDDEN`

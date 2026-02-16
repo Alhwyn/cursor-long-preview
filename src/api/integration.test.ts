@@ -1749,6 +1749,53 @@ describe("RPC API integration (fallback mode)", () => {
     expect(joinPayload.data.playerId).toBe("trimmed-lobby-player");
   });
 
+  test("server join trims route server identifier before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const createResponse = await fetch(`${baseUrl}/api/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Trimmed Route Server Join Id",
+        maxPlayers: 3,
+      }),
+    });
+    const createPayload = await createResponse.json();
+    const serverId = createPayload.data.server.id as string;
+
+    const joinResponse = await fetch(`${baseUrl}/api/servers/${encodeURIComponent(` ${serverId} `)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TrimmedRouteJoin",
+      }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    expect(joinResponse.status).toBe(200);
+    expect(joinPayload.ok).toBe(true);
+    expect(joinPayload.data.server.id).toBe(serverId);
+  });
+
+  test("server join with blank route server identifier returns MISSING_SERVER_ID", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/servers/%20%20%20/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "BlankRouteJoin",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("MISSING_SERVER_ID");
+  });
+
   test("servers endpoint reports disabled mode without Supabase env", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;

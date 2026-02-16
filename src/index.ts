@@ -322,10 +322,11 @@ async function createLobbyServer(request: Request): Promise<Response> {
 
 async function joinLobbyServer(request: Request): Promise<Response> {
   const params = bunParams(request);
-  const serverId = params.id;
-  if (!serverId) {
+  const rawServerId = params.id;
+  if (!rawServerId || rawServerId.trim().length === 0) {
     throw new HttpError(400, "MISSING_SERVER_ID", "Route parameter \"id\" is required.");
   }
+  const serverId = rawServerId.trim();
 
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
