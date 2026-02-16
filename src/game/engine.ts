@@ -1244,6 +1244,7 @@ function zombieToObservationEntity(zombie: Zombie): ObservationEntity {
     id: zombie.id,
     kind: "zombie",
     zombieType: zombie.zombieType,
+    terminatorType: zombie.zombieType,
     x: zombie.position.x,
     y: zombie.position.y,
     hp: zombie.hp,

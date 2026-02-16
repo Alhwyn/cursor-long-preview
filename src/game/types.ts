@@ -121,6 +121,7 @@ export interface ObservationEntity {
   id: string;
   kind: "player" | "zombie" | "agent" | "turret";
   zombieType?: ZombieType;
+  terminatorType?: ZombieType;
   name?: string;
   x: number;
   y: number;

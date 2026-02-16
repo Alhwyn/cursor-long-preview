@@ -232,6 +232,7 @@ Observation shape:
 
 `zombies` remains for backward compatibility. `terminators` is an equivalent alias for robot-themed clients.
 `nearestZombie` remains for backward compatibility. `nearestTerminator` is an equivalent alias.
+For terminator entities, `zombieType` remains for backward compatibility and `terminatorType` is an equivalent alias.
 
 ---
 

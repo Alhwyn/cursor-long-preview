@@ -313,6 +313,17 @@ describe("RPC API integration (fallback mode)", () => {
     const terminatorIds = actionPayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
     expect(terminatorIds).toEqual(zombieIds);
     expect(actionPayload.data.observation.nearestTerminator).toEqual(actionPayload.data.observation.nearestZombie);
+
+    const zombieTypeById = new Map(
+      actionPayload.data.observation.zombies.map((entity: { id: string; zombieType?: string }) => [entity.id, entity.zombieType]),
+    );
+    const terminatorTypeById = new Map(
+      actionPayload.data.observation.terminators.map((entity: { id: string; terminatorType?: string }) => [
+        entity.id,
+        entity.terminatorType,
+      ]),
+    );
+    expect(terminatorTypeById).toEqual(zombieTypeById);
   });
 
   test("join defaults player naming and deterministic ids when not provided", async () => {
@@ -1149,6 +1160,17 @@ describe("RPC API integration (fallback mode)", () => {
     const terminatorIds = observePayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
     expect(terminatorIds).toEqual(zombieIds);
     expect(observePayload.data.observation.nearestTerminator).toEqual(observePayload.data.observation.nearestZombie);
+
+    const zombieTypeById = new Map(
+      observePayload.data.observation.zombies.map((entity: { id: string; zombieType?: string }) => [entity.id, entity.zombieType]),
+    );
+    const terminatorTypeById = new Map(
+      observePayload.data.observation.terminators.map((entity: { id: string; terminatorType?: string }) => [
+        entity.id,
+        entity.terminatorType,
+      ]),
+    );
+    expect(terminatorTypeById).toEqual(zombieTypeById);
   });
 
   test("observe with unknown player returns 404", async () => {

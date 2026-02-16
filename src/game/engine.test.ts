@@ -633,6 +633,8 @@ describe("engine", () => {
     const observation = toObservation(built, "p-1");
     expect(observation.terminators).toHaveLength(observation.zombies.length);
     expect(observation.nearestTerminator?.id).toBe(observation.nearestZombie?.id);
+    const firstTerminator = observation.terminators[0];
+    expect(firstTerminator?.terminatorType).toBe(firstTerminator?.zombieType);
     expect(observation.turrets.length).toBeGreaterThanOrEqual(1);
   });
 });

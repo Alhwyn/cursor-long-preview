@@ -426,6 +426,16 @@ assert action_terminator_ids == action_zombie_ids, (
 assert action_payload["data"]["observation"]["nearestTerminator"] == action_payload["data"]["observation"]["nearestZombie"], (
     "action nearestTerminator alias mismatch with nearestZombie"
 )
+action_zombie_types = {
+    entity["id"]: entity.get("zombieType") for entity in action_payload["data"]["observation"]["zombies"]
+}
+action_terminator_types = {
+    entity["id"]: entity.get("terminatorType") for entity in action_payload["data"]["observation"]["terminators"]
+}
+assert action_terminator_types == action_zombie_types, (
+    "action observation type alias mismatch: "
+    f"zombieType={action_zombie_types} terminatorType={action_terminator_types}"
+)
 assert shoot_status == 200, f"shoot action status unexpected: {shoot_status}"
 assert shoot_payload["ok"] is True, "shoot action payload should be success"
 assert shoot_payload["data"]["state"]["players"][join_payload["data"]["playerId"]]["facing"] == "up", (
@@ -655,6 +665,15 @@ terminator_ids = [entity["id"] for entity in observe_alias_payload["data"]["obse
 assert terminator_ids == zombie_ids, f"terminator alias mismatch: zombies={zombie_ids} terminators={terminator_ids}"
 assert observe_alias_payload["data"]["observation"]["nearestTerminator"] == observe_alias_payload["data"]["observation"]["nearestZombie"], (
     "nearestTerminator alias mismatch with nearestZombie"
+)
+zombie_types = {
+    entity["id"]: entity.get("zombieType") for entity in observe_alias_payload["data"]["observation"]["zombies"]
+}
+terminator_types = {
+    entity["id"]: entity.get("terminatorType") for entity in observe_alias_payload["data"]["observation"]["terminators"]
+}
+assert terminator_types == zombie_types, (
+    f"terminator type alias mismatch: zombieType={zombie_types} terminatorType={terminator_types}"
 )
 assert blank_action_session_payload["ok"] is False, "blank action session payload should be failure"
 assert blank_action_session_payload["error"]["code"] == "INVALID_FIELD", f"blank action session code mismatch: {blank_action_session_payload['error']['code']}"
