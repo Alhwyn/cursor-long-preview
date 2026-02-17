@@ -5,7 +5,7 @@ Use this skill when an agent needs to play or test the RPC terminator-siege game
 ## Goal
 
 Drive the server-authoritative simulation through API actions without direct state mutation.
-Leverage CAI companion support when enabled (combat-capable in-session agent ally).
+Leverage Claude Bot companion support when enabled (combat-capable in-session agent ally).
 
 ## Preconditions
 
@@ -19,7 +19,7 @@ Leverage CAI companion support when enabled (combat-capable in-session agent all
 2. Store `sessionId` and `playerId`.
 3. Loop:
    - `GET /api/game/observe?session=<id>&player=<id>`
-   - Decide action (`move`, `attack`, `build`, `wait`)
+   - Decide action (`move`, `shoot`, `attack`, `build`, `wait`)
    - `POST /api/game/action`
 4. Stop when state/observation `status` becomes `won` or `lost`.
 
@@ -80,7 +80,7 @@ Default behavior:
 5. Leader starts match:
    - `POST /api/party/start`
 6. Play through `/api/game/action`; consume `session_state` events from SSE.
-7. Expect CAI companion in state/observation when `agentEnabled` is true (default for party starts).
+7. Expect Claude Bot companion in state/observation when `agentEnabled` is true (default for party starts).
 8. For external agents, share the returned `sessionId` from `/api/party/start`, then each agent joins with `POST /api/game/join` using that `session`.
 
 ### Important session/server constraints
@@ -88,7 +88,12 @@ Default behavior:
 - If calling `POST /api/game/join` with `serverId`, the server must exist, else `SERVER_NOT_FOUND`.
 - If calling `POST /api/game/join` with both `session` and `serverId`, they must match, else `SESSION_SERVER_MISMATCH`.
 - If target session belongs to a lobby server at max capacity, join returns `SERVER_FULL`.
-- Optional identifiers (`session`, `serverId`, `playerId`, observe `player`, attack `targetId`) must be non-empty strings when provided; blank strings return `INVALID_FIELD`.
+- `terminatorCount` is the preferred spawn-count field; `zombieCount` is a legacy alias.
+- If both `terminatorCount` and `zombieCount` are provided, they must match and each field is validated independently.
+- Explicit `null` for either count field is invalid (`INVALID_FIELD`) even when the other alias is omitted.
+- Matching dual-field numeric-invalid values (for example `33/33`, `0/0`, `-1/-1`, `1.5/1.5`) return `INVALID_ZOMBIE_COUNT`.
+- Matching dual-field non-numeric values (for example `"4"/"4"`) return `INVALID_FIELD`.
+- Optional identifiers (`session`, `serverId`, `playerId`, observe `player`, `attack.targetId`, `shoot.targetId`) must be non-empty strings when provided; blank strings return `INVALID_FIELD`.
 - Identifier values are trimmed server-side before lookup; `"  abc  "` is treated as `"abc"`.
 - Lobby join route identifiers are trimmed server-side too; `/api/servers/%20<id>%20/join` resolves to `<id>`, while blank route IDs return `MISSING_SERVER_ID`.
 
@@ -104,6 +109,7 @@ Default behavior:
 
 ## Action Strategy Hint
 
+- Prefer shooting when nearest terminator is within ranged lane and weapon cooldown allows it.
 - Prefer attacking when nearest terminator distance is `<= 1`.
 - Otherwise move along axis indicated by nearest terminator `(dx, dy)`.
 - Respect cooldown conflicts (`ATTACK_COOLDOWN`) by sending `wait` or movement.
@@ -111,6 +117,8 @@ Default behavior:
   - `state.scrap` increases when terminators are destroyed.
   - Build barricade with `{"type":"build","buildType":"barricade","direction":"<dir>"}` (costs scrap).
   - Deploy ally robot with `{"type":"build","buildType":"ally_robot","direction":"<dir>"}` when enough scrap.
+  - Deploy turret with `{"type":"build","buildType":"turret","direction":"<dir>"}` to add autonomous ranged defense.
+- Observation payload includes `nearestTerminator` (preferred) and legacy `nearestZombie` aliases with equivalent values.
 
 ## References
 

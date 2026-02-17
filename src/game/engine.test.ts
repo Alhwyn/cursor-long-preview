@@ -45,19 +45,83 @@ describe("engine", () => {
   test("attack applies damage and enforces cooldown", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 3, y: 2 };
+    state.players["p-1"]!.facing = "left";
 
     const afterAttack = applyAction(state, "p-1", { type: "attack" });
-    expect(afterAttack.zombies["z-1"]?.hp).toBe(42);
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
     expect(afterAttack.tick).toBe(1);
+    expect(afterAttack.players["p-1"]?.facing).toBe("right");
 
     expect(() => applyAction(afterAttack, "p-1", { type: "attack" })).toThrow("cooldown");
+  });
+
+  test("attack with explicit target updates facing toward target", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
+    expect(afterAttack.players["p-1"]?.facing).toBe("left");
+  });
+
+  test("attack trims explicit target id before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "  z-1  " });
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
+    expect(afterAttack.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("attack trims mixed-whitespace explicit target id before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "\n\tz-1\t\n" });
+    expect(afterAttack.zombies["z-1"]?.hp).toBe(44);
+    expect(afterAttack.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("attack cooldown is enforced before explicit target validation", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "z-missing" })).toThrow("cooldown");
+  });
+
+  test("attack cooldown is enforced before trimmed explicit target validation", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const afterAttack = applyAction(state, "p-1", { type: "attack", targetId: "z-1" });
+    expect(() => applyAction(afterAttack, "p-1", { type: "attack", targetId: "  z-missing  " })).toThrow("cooldown");
+  });
+
+  test("attack with destroyed explicit target is rejected", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-destroyed-attack-target",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow(
+      "does not exist or is already destroyed",
+    );
   });
 
   test("attack out of range is rejected", () => {
     const state = makeState();
     state.zombies["z-1"]!.position = { x: 12, y: 12 };
 
-    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of attack range");
+    expect(() => applyAction(state, "p-1", { type: "attack", targetId: "z-1" })).toThrow("out of weapon range");
   });
 
   test("build barricade spends scrap and converts tile to wall", () => {
@@ -176,6 +240,8 @@ describe("engine", () => {
     const observation = toObservation(state, "p-1");
     expect(observation.nearestZombie?.id).toBe("z-2");
     expect(observation.nearestZombie?.distance).toBe(1);
+    expect(observation.nearestTerminator?.id).toBe("z-2");
+    expect(observation.nearestTerminator?.distance).toBe(1);
   });
 
   test("observation tie-breaks nearest zombie by id and keeps entities sorted", () => {
@@ -190,10 +256,21 @@ describe("engine", () => {
     const observation = toObservation(state, "p-1");
     expect(observation.nearestZombie?.distance).toBe(1);
     expect(observation.nearestZombie?.id).toBe("a-zombie");
+    expect(observation.nearestTerminator?.id).toBe("a-zombie");
 
     const entityIds = observation.entities.map(entity => entity.id);
     const sortedEntityIds = [...entityIds].sort((left, right) => left.localeCompare(right));
     expect(entityIds).toEqual(sortedEntityIds);
+  });
+
+  test("observation nearestTerminator alias is null when no living terminators remain", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    const observation = toObservation(state, "p-1");
+    expect(observation.nearestZombie).toBeNull();
+    expect(observation.nearestTerminator).toBeNull();
   });
 
   test("same input state and action produces deterministic output", () => {
@@ -248,10 +325,10 @@ describe("engine", () => {
     expect(() => tickGame(state)).toThrow("already completed");
   });
 
-  test("agent-enabled state includes CAI companion and observation data", () => {
+  test("agent-enabled state includes Claude Bot companion and observation data", () => {
     const state = makeStateWithAgent();
     expect(state.companion).toBeDefined();
-    expect(state.companion?.name).toBe("CAI");
+    expect(state.companion?.name).toBe("Claude Bot");
 
     const observation = toObservation(state, "p-1");
     expect(observation.companion).toBeDefined();
@@ -327,5 +404,237 @@ describe("engine", () => {
     expect(next.status).toBe("active");
     expect(next.wave).toBeGreaterThan(1);
     expect(Object.values(next.zombies).some(zombie => zombie.alive)).toBe(true);
+  });
+
+  test("shoot action hits terminator robot in facing direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+  });
+
+  test("shoot with explicit targetId rotates facing toward target", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "z-1" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("shoot trims explicit targetId before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "  z-1  " });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("shoot trims mixed-whitespace explicit targetId before resolution", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "\n\tz-1\t\n" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("right");
+  });
+
+  test("shoot targetId takes precedence over provided direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "z-1", direction: "right" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("left");
+  });
+
+  test("shoot trimmed targetId takes precedence over provided direction", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 1, y: 2 };
+
+    const next = applyAction(state, "p-1", { type: "shoot", targetId: "  z-1  ", direction: "right" });
+    expect(next.zombies["z-1"]?.hp).toBe(44);
+    expect(next.players["p-1"]?.facing).toBe("left");
+  });
+
+  test("shoot with unknown explicit target is rejected", () => {
+    const state = makeState();
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-missing" })).toThrow(
+      "does not exist or is already destroyed",
+    );
+  });
+
+  test("shoot with destroyed explicit target is rejected", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-destroyed-target",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.zombies["z-1"]!.alive = false;
+    state.zombies["z-1"]!.hp = 0;
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-1" })).toThrow(
+      "does not exist or is already destroyed",
+    );
+  });
+
+  test("shoot with explicit target out of range is rejected", () => {
+    const state = makeState();
+    state.zombies["z-1"]!.position = { x: 12, y: 2 };
+
+    expect(() => applyAction(state, "p-1", { type: "shoot", targetId: "z-1" })).toThrow("out of weapon range");
+  });
+
+  test("shoot out-of-range target does not fallback to directional in-range target", () => {
+    const { state } = createInitialGameState({
+      sessionId: "session-target-priority",
+      playerId: "p-1",
+      playerName: "Tester",
+      zombieCount: 2,
+      mode: "classic",
+    });
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+    state.zombies["z-2"]!.position = { x: 12, y: 2 };
+
+    expect(() =>
+      applyAction(state, "p-1", { type: "shoot", targetId: "z-2", direction: "right" }),
+    ).toThrow("out of weapon range");
+    expect(state.zombies["z-1"]?.hp).toBe(70);
+  });
+
+  test("shoot miss still consumes cooldown", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot" });
+    expect(afterMiss.zombies["z-1"]?.hp).toBe(70);
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot" })).toThrow("cooldown");
+  });
+
+  test("shoot cooldown is enforced before explicit target validation", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot" });
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot", targetId: "z-missing" })).toThrow("cooldown");
+  });
+
+  test("shoot cooldown is enforced before trimmed explicit target validation", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "left";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot" });
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot", targetId: "  z-missing  " })).toThrow("cooldown");
+  });
+
+  test("shoot miss with explicit direction updates facing", () => {
+    const state = makeState();
+    state.players["p-1"]!.facing = "right";
+    state.zombies["z-1"]!.position = { x: 6, y: 2 };
+
+    const afterMiss = applyAction(state, "p-1", { type: "shoot", direction: "up" });
+    expect(afterMiss.players["p-1"]?.facing).toBe("up");
+    expect(afterMiss.zombies["z-1"]?.hp).toBe(70);
+    expect(() => applyAction(afterMiss, "p-1", { type: "shoot" })).toThrow("cooldown");
+  });
+
+  test("build turret deploys and can attack terminator robots", () => {
+    const state = makeState();
+    state.scrap = 200;
+    state.zombies["z-1"]!.position = { x: 7, y: 2 };
+
+    const afterBuild = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "turret",
+      direction: "right",
+    });
+    const turret = Object.values(afterBuild.turrets)[0];
+    expect(turret).toBeDefined();
+    expect(afterBuild.scrap).toBe(140);
+    expect(afterBuild.zombies["z-1"]?.hp).toBeLessThan(70);
+  });
+
+  test("build turret rejects occupied target tile and preserves scrap", () => {
+    const state = makeState();
+    state.scrap = 200;
+    state.zombies["z-1"]!.position = { x: 3, y: 2 };
+
+    expect(() =>
+      applyAction(state, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction: "right",
+      }),
+    ).toThrow("occupied tile");
+    expect(state.scrap).toBe(200);
+  });
+
+  test("build turret enforces active turret cap", () => {
+    const state = makeState();
+    state.scrap = 400;
+    state.players["p-1"]!.position = { x: 10, y: 10 };
+    state.zombies["z-1"]!.position = { x: 16, y: 16 };
+
+    for (const [tileX, tileY] of [
+      [11, 10],
+      [9, 10],
+      [10, 9],
+      [10, 11],
+    ]) {
+      const tile = state.map.tiles.find(candidate => candidate.x === tileX && candidate.y === tileY);
+      if (tile) {
+        tile.type = "grass";
+      }
+    }
+
+    const buildDirections = ["right", "left", "up", "down"] as const;
+    let current = state;
+    for (const direction of buildDirections) {
+      current = applyAction(current, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction,
+      });
+    }
+
+    expect(Object.values(current.turrets).filter(turret => turret.alive)).toHaveLength(4);
+    expect(() =>
+      applyAction(current, "p-1", {
+        type: "build",
+        buildType: "turret",
+        direction: "right",
+      }),
+    ).toThrow("Maximum 4 turrets");
+  });
+
+  test("observation includes terminator alias and turrets", () => {
+    const state = makeState();
+    state.scrap = 200;
+    const built = applyAction(state, "p-1", {
+      type: "build",
+      buildType: "turret",
+      direction: "right",
+    });
+    const observation = toObservation(built, "p-1");
+    expect(observation.terminators).toHaveLength(observation.zombies.length);
+    expect(observation.nearestTerminator?.id).toBe(observation.nearestZombie?.id);
+    const firstTerminator = observation.terminators[0];
+    expect(firstTerminator?.terminatorType).toBe(firstTerminator?.zombieType);
+    expect(observation.turrets.length).toBeGreaterThanOrEqual(1);
   });
 });

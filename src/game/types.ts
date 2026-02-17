@@ -32,6 +32,7 @@ export interface Player extends CombatStats {
   id: string;
   name: string;
   position: Vec2;
+  facing: Direction;
   hp: number;
   maxHp: number;
   alive: boolean;
@@ -54,14 +55,26 @@ export interface CompanionAgent extends CombatStats {
   id: string;
   name: string;
   position: Vec2;
+  facing: Direction;
   hp: number;
   maxHp: number;
   alive: boolean;
   lastAttackTick: number;
-  emote: "idle" | "focus" | "attack" | "hurt";
+  emote: "idle" | "focus" | "attack" | "hurt" | "build" | "cheer";
 }
 
-export type BuildType = "barricade" | "ally_robot";
+export interface Turret extends CombatStats {
+  id: string;
+  name: string;
+  position: Vec2;
+  facing: Direction;
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  lastAttackTick: number;
+}
+
+export type BuildType = "barricade" | "ally_robot" | "turret";
 
 export type Action =
   | {
@@ -70,6 +83,11 @@ export type Action =
     }
   | {
       type: "attack";
+      targetId?: string;
+    }
+  | {
+      type: "shoot";
+      direction?: Direction;
       targetId?: string;
     }
   | {
@@ -96,12 +114,14 @@ export interface GameState {
   zombies: Record<string, Zombie>;
   companion?: CompanionAgent;
   builtRobots: Record<string, CompanionAgent>;
+  turrets: Record<string, Turret>;
 }
 
 export interface ObservationEntity {
   id: string;
-  kind: "player" | "zombie" | "agent";
+  kind: "player" | "zombie" | "agent" | "turret";
   zombieType?: ZombieType;
+  terminatorType?: ZombieType;
   name?: string;
   x: number;
   y: number;
@@ -128,11 +148,14 @@ export interface Observation {
   status: GameStatus;
   self: ObservationEntity;
   nearestZombie: NearestZombieInfo | null;
+  nearestTerminator: NearestZombieInfo | null;
   players: ObservationEntity[];
   zombies: ObservationEntity[];
+  terminators: ObservationEntity[];
   companion?: ObservationEntity;
   scrap: number;
   builtRobots: ObservationEntity[];
+  turrets: ObservationEntity[];
   entities: ObservationEntity[];
 }
 

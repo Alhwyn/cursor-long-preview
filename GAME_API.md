@@ -44,13 +44,29 @@ Request:
   "accessKey": "optional-temporary-agent-access-key",
   "playerId": "optional-player-id",
   "serverId": "optional-server-id",
-  "zombieCount": 4,
+  "terminatorCount": 4,
   "agentEnabled": true
 }
 ```
 
-`zombieCount` must be an integer from `1` to `32` (legacy field name; controls terminator count).
-`agentEnabled` is optional boolean (when true on new session, spawns CAI combat companion).
+`terminatorCount` must be an integer from `1` to `32`.
+`zombieCount` remains a legacy alias for backward compatibility.
+If both `terminatorCount` and `zombieCount` are provided, they must match.
+When both are sent, each field is validated independently (type + integer range checks); an invalid value in either field is rejected.
+Count field validation errors:
+- `400 INVALID_FIELD` for non-numeric values (including `null`) for either field (whether provided alone or alongside the other alias), or dual-field mismatches.
+- Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
+- When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
+- Matching dual-field non-numeric requests (for example `"4"/"4"`) also return `400 INVALID_FIELD`.
+- `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+- Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
+- Single-field low/negative requests (for example `terminatorCount: 0` or `zombieCount: -1`) return `400 INVALID_ZOMBIE_COUNT`.
+Boundary behavior:
+- `terminatorCount` accepts `1` and `32`.
+- legacy `zombieCount` accepts `1` and `32`.
+- dual-field requests with matching boundaries (`1/1`, `32/32`) are accepted.
+- dual-field requests with mismatched boundaries (`1/32` or `32/1`) return `400 INVALID_FIELD`.
+`agentEnabled` is optional boolean (when true on new session, spawns Claude Bot combat companion).
 If `playerName` is omitted/blank, server defaults to `Survivor-N`.
 If `session`, `playerId`, or `serverId` are provided, they must be non-empty strings (values are trimmed).
 If `accessKey` is provided, session is resolved from the key unless explicit `session` is also provided.
@@ -198,11 +214,22 @@ Observation shape:
     "hp": 70,
     "alive": true
   },
+  "nearestTerminator": {
+    "id": "z-2",
+    "distance": 5,
+    "dx": 4,
+    "dy": 1,
+    "x": 6,
+    "y": 3,
+    "hp": 70,
+    "alive": true
+  },
   "scrap": 32,
+  "terminators": [],
   "companion": {
     "id": "cai-agent",
     "kind": "agent",
-    "name": "CAI",
+    "name": "Claude Bot",
     "x": 3,
     "y": 2,
     "hp": 180,
@@ -212,9 +239,14 @@ Observation shape:
   "builtRobots": [],
   "players": [],
   "zombies": [],
+  "turrets": [],
   "entities": []
 }
 ```
+
+`zombies` remains for backward compatibility. `terminators` is an equivalent alias for robot-themed clients.
+`nearestZombie` remains for backward compatibility. `nearestTerminator` is an equivalent alias.
+For terminator entities, `zombieType` remains for backward compatibility and `terminatorType` is an equivalent alias.
 
 ---
 
@@ -239,7 +271,8 @@ Action schema:
 
 - `{"type":"move","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"attack","targetId":"optional-terminator-id"}` (`targetId` must be non-empty when provided)
-- `{"type":"build","buildType":"barricade"|"ally_robot","direction":"up"|"down"|"left"|"right"}`
+- `{"type":"shoot","direction":"optional-up|down|left|right","targetId":"optional-terminator-id"}`
+- `{"type":"build","buildType":"barricade"|"ally_robot"|"turret","direction":"up"|"down"|"left"|"right"}`
 - `{"type":"wait"}`
 
 `session` and `playerId` are required non-empty strings and are trimmed before lookup.
@@ -257,6 +290,20 @@ Response:
   }
 }
 ```
+
+Behavior note:
+- When provided, `attack.targetId` and `shoot.targetId` values are trimmed before lookup.
+- `attack` can auto-select nearest living robot when `targetId` is omitted.
+- If explicit `attack.targetId` is missing or already destroyed, the action fails with `TARGET_NOT_FOUND`.
+- If explicit `attack.targetId` is out of range, the action fails with `TARGET_OUT_OF_RANGE`.
+- Attack cooldown validation runs before explicit target existence checks, so rapid follow-up attacks can return `ATTACK_COOLDOWN` even when `targetId` is invalid.
+- `shoot` fires along facing direction (or provided direction).
+- When both `shoot.targetId` and `shoot.direction` are provided, `targetId` targeting takes precedence for hit resolution and facing.
+- When `shoot.direction` is provided, the player's facing updates to that direction even if the shot misses.
+- If no robot target is in that lane, the action still succeeds and consumes attack cooldown.
+- If an explicit `shoot.targetId` is missing or already destroyed, the action fails with `TARGET_NOT_FOUND`.
+- If an explicit `shoot.targetId` is out of range, the action fails with `TARGET_OUT_OF_RANGE`.
+- Cooldown validation runs before explicit target existence checks, so immediate follow-up shots can return `ATTACK_COOLDOWN` even with an invalid `targetId`.
 
 ---
 
@@ -328,7 +375,7 @@ Request:
 
 ```json
 {
-  "name": "Zombie Meadow",
+  "name": "Terminator Meadow",
   "description": "Casual run",
   "maxPlayers": 4
 }
@@ -347,7 +394,7 @@ Response:
     "mode": "disabled",
     "server": {
       "id": "srv-...",
-      "name": "Zombie Meadow",
+      "name": "Terminator Meadow",
       "maxPlayers": 4
     }
   }
@@ -472,16 +519,34 @@ Request:
 {
   "partyId": "party-...",
   "playerId": "party-player-1",
-  "zombieCount": 6,
+  "terminatorCount": 6,
   "agentEnabled": true
 }
 ```
+
+`terminatorCount` is the preferred spawn-count field for party starts.
+`zombieCount` remains a legacy alias; when both are provided they must match.
+Both fields, when provided, must be integers from `1` to `32`.
+If both are sent, each field is validated independently (type + integer range checks) before matching is enforced.
+Count field validation errors:
+- `400 INVALID_FIELD` for non-numeric values (including `null`) for either field (whether provided alone or alongside the other alias), or dual-field mismatches.
+- Explicit dual-null payloads (`zombieCount: null` and `terminatorCount: null`) are rejected with `400 INVALID_FIELD`.
+- When one alias is `null` and the other is invalid (for example non-numeric, fractional, low/negative, or otherwise out-of-range), response remains `400 INVALID_FIELD` because null/type validation runs first.
+- Matching dual-field non-numeric requests (for example `"2"/"2"`) also return `400 INVALID_FIELD`.
+- `400 INVALID_ZOMBIE_COUNT` for numeric values outside `1..32` or non-integer numbers (for either field), even when the other alias is valid.
+- Matching dual-field numeric-invalid requests (for example `33/33`, `0/0`, `-1/-1`, or `1.5/1.5`) also return `400 INVALID_ZOMBIE_COUNT`.
+- Single-field low/negative requests (for example `terminatorCount: 0` or `zombieCount: -1`) return `400 INVALID_ZOMBIE_COUNT`.
+Boundary behavior:
+- `terminatorCount` accepts `1` and `32`.
+- legacy `zombieCount` accepts `1` and `32`.
+- dual-field requests with matching boundaries (`1/1`, `32/32`) are accepted.
+- dual-field requests with mismatched boundaries (`1/32` or `32/1`) return `400 INVALID_FIELD`.
 
 Returns:
 - `403 PARTY_NOT_LEADER` when starter is not leader.
 - `409 PARTY_NOT_READY` when not all members are ready.
 - `200` with `sessionId` + full starting `state` on success.
-- `agentEnabled` defaults to `true` for party starts, so CAI companion joins unless explicitly disabled.
+- `agentEnabled` defaults to `true` for party starts, so Claude Bot companion joins unless explicitly disabled.
 
 ---
 
@@ -541,11 +606,12 @@ Use this stream for party/lobby sync and in-match state push updates.
 ## Claude / Agent Play Loop (single session)
 
 1. `POST /api/game/join` → keep `sessionId` + `playerId`.
-2. `GET /api/game/observe?session=...&player=...` → inspect nearest zombie + HP.
+2. `GET /api/game/observe?session=...&player=...` → inspect nearest terminator robot + HP.
 3. Decide action:
-   - if zombie adjacent => `attack`
+   - if robot adjacent => `attack`
+   - if robot is in front lane => `shoot`
    - else move to reduce distance.
-   - if enough `scrap`, optionally `build` barricades or ally robots.
+   - if enough `scrap`, optionally `build` barricades, ally robots, or turrets.
 4. `POST /api/game/action`.
 5. Repeat 2–4 until `status` is `won` or `lost`.
 

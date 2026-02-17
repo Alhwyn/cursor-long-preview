@@ -57,6 +57,222 @@ async function stopServer(server: RunningServer | null): Promise<void> {
   await server.process.exited;
 }
 
+function directionTowardDelta(dx: number, dy: number): Direction {
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? "right" : "left";
+  }
+  return dy >= 0 ? "down" : "up";
+}
+
+function secondaryDirectionTowardDelta(dx: number, dy: number, primaryDirection: Direction): Direction | null {
+  if (primaryDirection === "left" || primaryDirection === "right") {
+    if (dy === 0) {
+      return null;
+    }
+    return dy > 0 ? "down" : "up";
+  }
+  if (dx === 0) {
+    return null;
+  }
+  return dx > 0 ? "right" : "left";
+}
+
+interface NearestZombieObservation {
+  id?: string;
+  distance: number;
+  dx: number;
+  dy: number;
+}
+
+async function observeNearestZombie(
+  baseUrl: string,
+  sessionId: string,
+  playerId: string,
+): Promise<NearestZombieObservation | null> {
+  const observeResponse = await fetch(
+    `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+  );
+  const observePayload = await observeResponse.json();
+  expect(observeResponse.status).toBe(200);
+  expect(observePayload.ok).toBe(true);
+  const nearestZombie = observePayload.data.observation.nearestZombie as NearestZombieObservation | undefined;
+  const nearestTerminator = observePayload.data.observation.nearestTerminator as NearestZombieObservation | undefined;
+  if (nearestZombie && nearestTerminator) {
+    expect(nearestTerminator).toEqual(nearestZombie);
+  }
+  return nearestTerminator ?? nearestZombie ?? null;
+}
+
+interface MovePlayerIntoRangeOptions {
+  baseUrl: string;
+  sessionId: string;
+  playerId: string;
+  targetDistance: number;
+  maxSteps?: number;
+}
+
+async function movePlayerIntoRange({
+  baseUrl,
+  sessionId,
+  playerId,
+  targetDistance,
+  maxSteps = 80,
+}: MovePlayerIntoRangeOptions): Promise<boolean> {
+  for (let step = 0; step < maxSteps; step++) {
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    if (!nearestZombie) {
+      return false;
+    }
+    if (nearestZombie.distance <= targetDistance) {
+      return true;
+    }
+
+    const primaryDirection = directionTowardDelta(nearestZombie.dx, nearestZombie.dy);
+    const secondaryDirection = secondaryDirectionTowardDelta(nearestZombie.dx, nearestZombie.dy, primaryDirection);
+
+    const tryMove = async (direction: Direction) => {
+      const response = await fetch(`${baseUrl}/api/game/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session: sessionId,
+          playerId,
+          action: { type: "move", direction },
+        }),
+      });
+      const payload = await response.json();
+      return { response, payload };
+    };
+
+    let moveAttempt = await tryMove(primaryDirection);
+    if (
+      moveAttempt.response.status === 409 &&
+      (moveAttempt.payload.error.code === "MOVE_BLOCKED" || moveAttempt.payload.error.code === "MOVE_OCCUPIED") &&
+      secondaryDirection
+    ) {
+      moveAttempt = await tryMove(secondaryDirection);
+    }
+
+    if (moveAttempt.response.status === 200) {
+      expect(moveAttempt.payload.ok).toBe(true);
+      continue;
+    }
+
+    expect(moveAttempt.response.status).toBe(409);
+    expect(moveAttempt.payload.ok).toBe(false);
+    expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(moveAttempt.payload.error.code);
+    const progressTick = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const progressPayload = await progressTick.json();
+    expect(progressTick.status).toBe(200);
+    expect(progressPayload.ok).toBe(true);
+  }
+
+  return false;
+}
+
+interface ShootZombieUntilDestroyedOptions {
+  baseUrl: string;
+  sessionId: string;
+  playerId: string;
+  targetId: string;
+  targetDistance?: number;
+  maxAttempts?: number;
+}
+
+async function shootZombieUntilDestroyed({
+  baseUrl,
+  sessionId,
+  playerId,
+  targetId,
+  targetDistance = 8,
+  maxAttempts = 12,
+}: ShootZombieUntilDestroyedOptions): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    if (shootResponse.status === 409) {
+      expect(shootPayload.ok).toBe(false);
+      expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+      const movedIntoRange = await movePlayerIntoRange({
+        baseUrl,
+        sessionId,
+        playerId,
+        targetDistance,
+      });
+      expect(movedIntoRange).toBe(true);
+      continue;
+    }
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    const targetState = (shootPayload.data.state.zombies as Record<string, { alive: boolean }>)[targetId];
+    if (!targetState) {
+      throw new Error(`Expected zombie ${targetId} to remain in state payload.`);
+    }
+    if (!targetState.alive) {
+      return true;
+    }
+
+    const tickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const tickPayload = await tickResponse.json();
+    expect(tickResponse.status).toBe(200);
+    expect(tickPayload.ok).toBe(true);
+  }
+
+  return false;
+}
+
+interface ReadyPartyContext {
+  partyId: string;
+  leaderPlayerId: string;
+}
+
+async function createReadySingleMemberParty(baseUrl: string, leaderName: string): Promise<ReadyPartyContext> {
+  const createPartyResponse = await fetch(`${baseUrl}/api/party/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ playerName: leaderName }),
+  });
+  const createPartyPayload = await createPartyResponse.json();
+  expect(createPartyResponse.status).toBe(201);
+  expect(createPartyPayload.ok).toBe(true);
+
+  const partyId = createPartyPayload.data.party.partyId as string;
+  const leaderPlayerId = createPartyPayload.data.player.playerId as string;
+
+  const readyResponse = await fetch(`${baseUrl}/api/party/ready`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      partyId,
+      playerId: leaderPlayerId,
+      ready: true,
+    }),
+  });
+  const readyPayload = await readyResponse.json();
+  expect(readyResponse.status).toBe(200);
+  expect(readyPayload.ok).toBe(true);
+
+  return { partyId, leaderPlayerId };
+}
+
 describe("RPC API integration (fallback mode)", () => {
   let server: RunningServer | null = null;
 
@@ -101,6 +317,51 @@ describe("RPC API integration (fallback mode)", () => {
     expect(stateResponse.status).toBe(200);
     expect(statePayload.ok).toBe(true);
     expect(statePayload.data.state.tick).toBeGreaterThanOrEqual(1);
+  });
+
+  test("action response observation includes terminators alias parity", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ActionObserveAlias" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "wait" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(200);
+    expect(actionPayload.ok).toBe(true);
+    expect(actionPayload.data.observation.terminators).toHaveLength(actionPayload.data.observation.zombies.length);
+
+    const zombieIds = actionPayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
+    const terminatorIds = actionPayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
+    expect(terminatorIds).toEqual(zombieIds);
+    expect(actionPayload.data.observation.nearestTerminator).toEqual(actionPayload.data.observation.nearestZombie);
+
+    const zombieTypeById = new Map(
+      actionPayload.data.observation.zombies.map((entity: { id: string; zombieType?: string }) => [entity.id, entity.zombieType]),
+    );
+    const terminatorTypeById = new Map(
+      actionPayload.data.observation.terminators.map((entity: { id: string; terminatorType?: string }) => [
+        entity.id,
+        entity.terminatorType,
+      ]),
+    );
+    expect(terminatorTypeById).toEqual(zombieTypeById);
   });
 
   test("join defaults player naming and deterministic ids when not provided", async () => {
@@ -253,6 +514,60 @@ describe("RPC API integration (fallback mode)", () => {
     expect(payload.error.code).toBe("INVALID_DIRECTION");
   });
 
+  test("shoot with invalid direction is rejected with 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "BadShootDirectionUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const response = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", direction: "north" },
+      }),
+    });
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_DIRECTION");
+  });
+
+  test("shoot with targetId and invalid direction is rejected with 400", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "BadShootDirectionWithTargetUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const response = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "z-1", direction: "north" },
+      }),
+    });
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_DIRECTION");
+  });
+
   test("invalid join field types return INVALID_FIELD", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -361,6 +676,21 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackBlankTarget.status).toBe(400);
     expect(attackBlankTargetPayload.ok).toBe(false);
     expect(attackBlankTargetPayload.error.code).toBe("INVALID_FIELD");
+
+    const shootBlankTarget = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: "   " },
+      }),
+    });
+    const shootBlankTargetPayload = await shootBlankTarget.json();
+
+    expect(shootBlankTarget.status).toBe(400);
+    expect(shootBlankTargetPayload.ok).toBe(false);
+    expect(shootBlankTargetPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("fractional zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
@@ -380,6 +710,950 @@ describe("RPC API integration (fallback mode)", () => {
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("fractional terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalTerminatorCount",
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("fractional terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("fractional zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "FractionalZombieCountWithValidTerminatorCount",
+        zombieCount: 1.5,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("low terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("low zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowZombieCountWithValidTerminatorCount",
+        zombieCount: 0,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("negative terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NegativeTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("negative zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NegativeZombieCountWithValidTerminatorCount",
+        zombieCount: -1,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("terminatorCount alias is accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountJoin",
+        terminatorCount: 2,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(Object.keys(payload.data.state.zombies).length).toBe(2);
+  });
+
+  test("terminatorCount alias accepts boundary values for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountBoundaryMinJoin",
+        terminatorCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "TerminatorCountBoundaryMaxJoin",
+        terminatorCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("legacy zombieCount alias is accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LegacyZombieCountJoin",
+        zombieCount: 2,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(Object.keys(payload.data.state.zombies).length).toBe(2);
+  });
+
+  test("legacy zombieCount alias accepts boundary values for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "ZombieCountBoundaryMinJoin",
+        zombieCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "ZombieCountBoundaryMaxJoin",
+        zombieCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("matching zombieCount and terminatorCount is accepted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingCountsJoin",
+        zombieCount: 3,
+        terminatorCount: 3,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(Object.keys(payload.data.state.zombies).length).toBe(3);
+  });
+
+  test("matching boundary counts are accepted for session creation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingMinBoundaryCountsJoin",
+        zombieCount: 1,
+        terminatorCount: 1,
+      }),
+    });
+    const minPayload = await minResponse.json();
+    expect(minResponse.status).toBe(201);
+    expect(minPayload.ok).toBe(true);
+    expect(Object.keys(minPayload.data.state.zombies).length).toBe(1);
+
+    const maxResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingMaxBoundaryCountsJoin",
+        zombieCount: 32,
+        terminatorCount: 32,
+      }),
+    });
+    const maxPayload = await maxResponse.json();
+    expect(maxResponse.status).toBe(201);
+    expect(maxPayload.ok).toBe(true);
+    expect(Object.keys(maxPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("mismatched zombieCount and terminatorCount is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MismatchedCountsJoin",
+        zombieCount: 2,
+        terminatorCount: 3,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("mismatched boundary zombieCount and terminatorCount is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MismatchedBoundaryCountsJoin",
+        zombieCount: 1,
+        terminatorCount: 32,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("reversed boundary mismatch zombieCount and terminatorCount is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "ReversedBoundaryMismatchedCountsJoin",
+        zombieCount: 32,
+        terminatorCount: 1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("invalid zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidZombieCountWithValidTerminatorCount",
+        zombieCount: "4",
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithValidTerminatorCount",
+        zombieCount: null,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount is rejected when terminatorCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithoutTerminatorCount",
+        zombieCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("both null zombieCount and terminatorCount are rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "BothNullCountAliasesJoin",
+        zombieCount: null,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount takes precedence over out-of-range terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithOutOfRangeTerminatorCount",
+        zombieCount: null,
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount takes precedence over low terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithLowTerminatorCount",
+        zombieCount: null,
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount takes precedence over negative terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithNegativeTerminatorCount",
+        zombieCount: null,
+        terminatorCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount takes precedence over fractional terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithFractionalTerminatorCount",
+        zombieCount: null,
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null zombieCount with invalid terminatorCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullZombieCountWithInvalidTerminatorCountType",
+        zombieCount: null,
+        terminatorCount: "4",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("invalid terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: "4",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount is rejected when zombieCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithoutZombieCount",
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over out-of-range zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithOutOfRangeZombieCount",
+        zombieCount: 33,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over low zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithLowZombieCount",
+        zombieCount: 0,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over negative zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithNegativeZombieCount",
+        zombieCount: -1,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount takes precedence over fractional zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithFractionalZombieCount",
+        zombieCount: 1.5,
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("null terminatorCount with invalid zombieCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NullTerminatorCountWithInvalidZombieCountType",
+        zombieCount: "4",
+        terminatorCount: null,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("out-of-range terminatorCount is rejected even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "OutOfRangeTerminatorCountWithValidZombieCount",
+        zombieCount: 4,
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("out-of-range zombieCount is rejected even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "OutOfRangeZombieCountWithValidTerminatorCount",
+        zombieCount: 33,
+        terminatorCount: 4,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("out-of-range terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "OutOfRangeTerminatorCount",
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("low terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowTerminatorCount",
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("negative terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NegativeTerminatorCount",
+        terminatorCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("low zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "LowZombieCount",
+        zombieCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("negative zombieCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "NegativeZombieCount",
+        zombieCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("matching out-of-range zombieCount and terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingOutOfRangeCountAliasesJoin",
+        zombieCount: 33,
+        terminatorCount: 33,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("matching low zombieCount and terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingLowCountAliasesJoin",
+        zombieCount: 0,
+        terminatorCount: 0,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("matching negative zombieCount and terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingNegativeCountAliasesJoin",
+        zombieCount: -1,
+        terminatorCount: -1,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("matching fractional zombieCount and terminatorCount is rejected with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingFractionalCountAliasesJoin",
+        zombieCount: 1.5,
+        terminatorCount: 1.5,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("non-number terminatorCount is rejected with INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "InvalidTerminatorCountType",
+        terminatorCount: "4",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("matching non-number zombieCount and terminatorCount is rejected with INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const response = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerName: "MatchingInvalidTypeCountAliasesJoin",
+        zombieCount: "4",
+        terminatorCount: "4",
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_FIELD");
   });
 
   test("move blocked by map wall returns conflict", async () => {
@@ -806,6 +2080,42 @@ describe("RPC API integration (fallback mode)", () => {
     expect(observePayload.data.observation.playerId).toBe(expectedPlayerId);
   });
 
+  test("observe payload includes terminators alias with matching entities", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ObserverTerminatorAlias" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+
+    const observeResponse = await fetch(`${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}`);
+    const observePayload = await observeResponse.json();
+
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    expect(observePayload.data.observation.terminators).toHaveLength(observePayload.data.observation.zombies.length);
+
+    const zombieIds = observePayload.data.observation.zombies.map((entity: { id: string }) => entity.id);
+    const terminatorIds = observePayload.data.observation.terminators.map((entity: { id: string }) => entity.id);
+    expect(terminatorIds).toEqual(zombieIds);
+    expect(observePayload.data.observation.nearestTerminator).toEqual(observePayload.data.observation.nearestZombie);
+
+    const zombieTypeById = new Map(
+      observePayload.data.observation.zombies.map((entity: { id: string; zombieType?: string }) => [entity.id, entity.zombieType]),
+    );
+    const terminatorTypeById = new Map(
+      observePayload.data.observation.terminators.map((entity: { id: string; terminatorType?: string }) => [
+        entity.id,
+        entity.terminatorType,
+      ]),
+    );
+    expect(terminatorTypeById).toEqual(zombieTypeById);
+  });
+
   test("observe with unknown player returns 404", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1127,6 +2437,527 @@ describe("RPC API integration (fallback mode)", () => {
     expect(actionPayload.error.code).toBe("INVALID_ACTION");
   });
 
+  test("shoot action accepts optional direction and executes", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShooterUser" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const actionResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const actionPayload = await actionResponse.json();
+
+    expect(actionResponse.status).toBe(200);
+    expect(actionPayload.ok).toBe(true);
+  });
+
+  test("shoot action triggers cooldown for immediate follow-up shot", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShooterCooldown" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const firstShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const firstShotPayload = await firstShotResponse.json();
+
+    const secondShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const secondShotPayload = await secondShotResponse.json();
+
+    expect(firstShotResponse.status).toBe(200);
+    expect(firstShotPayload.ok).toBe(true);
+    expect(secondShotResponse.status).toBe(409);
+    expect(secondShotPayload.ok).toBe(false);
+    expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
+  test("shoot cooldown is enforced before explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootCooldownTargetValidation" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const firstShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const firstShotPayload = await firstShotResponse.json();
+
+    const secondShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: "z-missing" },
+      }),
+    });
+    const secondShotPayload = await secondShotResponse.json();
+
+    expect(firstShotResponse.status).toBe(200);
+    expect(firstShotPayload.ok).toBe(true);
+    expect(secondShotResponse.status).toBe(409);
+    expect(secondShotPayload.ok).toBe(false);
+    expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
+  test("shoot cooldown is enforced before trimmed explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootCooldownTrimmedTargetValidation" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const firstShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "right" },
+      }),
+    });
+    const firstShotPayload = await firstShotResponse.json();
+
+    const secondShotResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: "  z-missing  " },
+      }),
+    });
+    const secondShotPayload = await secondShotResponse.json();
+
+    expect(firstShotResponse.status).toBe(200);
+    expect(firstShotPayload.ok).toBe(true);
+    expect(secondShotResponse.status).toBe(409);
+    expect(secondShotPayload.ok).toBe(false);
+    expect(secondShotPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
+  test("shoot action with direction updates facing even when it misses", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "DirectionShooter" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", direction: "up" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe("up");
+  });
+
+  test("shoot with unknown explicit target returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "MissingTargetShooter" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "z-missing" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(404);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("shoot with destroyed explicit target returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "DestroyedTargetShooter", zombieCount: 2 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 8,
+    });
+    expect(inRange).toBe(true);
+
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    expect(nearestZombie).toBeTruthy();
+    const destroyedTargetIdValue = nearestZombie?.id as string;
+    expect(destroyedTargetIdValue).toBeTruthy();
+
+    const destroyed = await shootZombieUntilDestroyed({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetId: destroyedTargetIdValue,
+      targetDistance: 8,
+      maxAttempts: 12,
+    });
+    expect(destroyed).toBe(true);
+
+    const cooldownClearTickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const cooldownClearTickPayload = await cooldownClearTickResponse.json();
+    expect(cooldownClearTickResponse.status).toBe(200);
+    expect(cooldownClearTickPayload.ok).toBe(true);
+
+    const destroyedTargetShootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: destroyedTargetIdValue },
+      }),
+    });
+    const destroyedTargetShootPayload = await destroyedTargetShootResponse.json();
+
+    expect(destroyedTargetShootResponse.status).toBe(404);
+    expect(destroyedTargetShootPayload.ok).toBe(false);
+    expect(destroyedTargetShootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("shoot targetId is trimmed before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimShootTarget" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "  z-missing  " },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(404);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("shoot targetId trims mixed whitespace before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimWhitespaceShootTarget" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "shoot", targetId: "\n\tz-missing\t\n" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(404);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("shoot targetId is trimmed before range validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimShootRangeTarget" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const observePayload = await observeResponse.json();
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    const self = observePayload.data.observation.self as { x: number; y: number };
+    const zombies = observePayload.data.observation.zombies as Array<{ id: string; x: number; y: number }>;
+    const outOfRangeZombie = zombies.find(zombie => Math.abs(zombie.x - self.x) + Math.abs(zombie.y - self.y) > 8);
+    expect(outOfRangeZombie).toBeDefined();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: `  ${outOfRangeZombie!.id}  ` },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(409);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+  });
+
+  test("shoot explicit out-of-range target with direction returns TARGET_OUT_OF_RANGE", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "OutOfRangeShootDirection" }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const observeResponse = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const observePayload = await observeResponse.json();
+    expect(observeResponse.status).toBe(200);
+    expect(observePayload.ok).toBe(true);
+    const self = observePayload.data.observation.self as { x: number; y: number };
+    const zombies = observePayload.data.observation.zombies as Array<{ id: string; x: number; y: number }>;
+    const outOfRangeZombie = zombies.find(zombie => Math.abs(zombie.x - self.x) + Math.abs(zombie.y - self.y) > 8);
+    expect(outOfRangeZombie).toBeDefined();
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: outOfRangeZombie!.id, direction: "up" },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(409);
+    expect(shootPayload.ok).toBe(false);
+    expect(shootPayload.error.code).toBe("TARGET_OUT_OF_RANGE");
+  });
+
+  test("shoot targetId takes precedence over provided direction in facing resolution", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootTargetPrecedence", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 4,
+    });
+
+    expect(inRange).toBe(true);
+    const preShootObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preShootPayload = await preShootObserve.json();
+    expect(preShootObserve.status).toBe(200);
+    expect(preShootPayload.ok).toBe(true);
+    const nearestZombie = preShootPayload.data.observation.nearestZombie as
+      | { id: string; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
+    const oppositeDirection: Direction =
+      expectedFacing === "left"
+        ? "right"
+        : expectedFacing === "right"
+          ? "left"
+          : expectedFacing === "up"
+            ? "down"
+            : "up";
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: nearestZombie!.id, direction: oppositeDirection },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe(expectedFacing);
+    expect(shootPayload.data.state.players[playerId].facing).not.toBe(oppositeDirection);
+  });
+
+  test("shoot trimmed targetId takes precedence over provided direction in facing resolution", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "ShootTrimmedTargetPrecedence", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 4,
+    });
+
+    expect(inRange).toBe(true);
+    const preShootObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preShootPayload = await preShootObserve.json();
+    expect(preShootObserve.status).toBe(200);
+    expect(preShootPayload.ok).toBe(true);
+    const nearestZombie = preShootPayload.data.observation.nearestZombie as
+      | { id: string; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
+    const oppositeDirection: Direction =
+      expectedFacing === "left"
+        ? "right"
+        : expectedFacing === "right"
+          ? "left"
+          : expectedFacing === "up"
+            ? "down"
+            : "up";
+
+    const shootResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "shoot", targetId: `  ${nearestZombie!.id}  `, direction: oppositeDirection },
+      }),
+    });
+    const shootPayload = await shootResponse.json();
+
+    expect(shootResponse.status).toBe(200);
+    expect(shootPayload.ok).toBe(true);
+    expect(shootPayload.data.state.players[playerId].facing).toBe(expectedFacing);
+    expect(shootPayload.data.state.players[playerId].facing).not.toBe(oppositeDirection);
+  });
+
   test("out-of-range attack returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1208,6 +3039,133 @@ describe("RPC API integration (fallback mode)", () => {
     expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
   });
 
+  test("attack unknown explicit target is trimmed before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimMissingTargetAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "  z-missing  " },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("attack unknown explicit target trims mixed whitespace before lookup", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TrimWhitespaceMissingTargetAttacker" }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "attack", targetId: "\n\tz-missing\t\n" },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
+  test("attack with destroyed explicit target returns 404", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "DestroyedTargetAttacker", zombieCount: 2 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 8,
+    });
+    expect(inRange).toBe(true);
+
+    const nearestZombie = await observeNearestZombie(baseUrl, sessionId, playerId);
+    expect(nearestZombie).toBeTruthy();
+    const targetId = nearestZombie?.id;
+    expect(targetId).toBeTruthy();
+    const targetIdValue = targetId as string;
+
+    const destroyed = await shootZombieUntilDestroyed({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetId: targetIdValue,
+      targetDistance: 8,
+      maxAttempts: 12,
+    });
+    expect(destroyed).toBe(true);
+
+    const postKillObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const postKillObservePayload = await postKillObserve.json();
+    expect(postKillObserve.status).toBe(200);
+    expect(postKillObservePayload.ok).toBe(true);
+    const postKillTarget = (postKillObservePayload.data.observation.zombies as Array<{ id: string; alive: boolean }>).find(
+      zombie => zombie.id === targetIdValue,
+    );
+    expect(postKillTarget?.alive).toBe(false);
+
+    const cooldownClearTickResponse = await fetch(`${baseUrl}/api/game/tick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    const cooldownClearTickPayload = await cooldownClearTickResponse.json();
+    expect(cooldownClearTickResponse.status).toBe(200);
+    expect(cooldownClearTickPayload.ok).toBe(true);
+
+    const attackResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: targetIdValue },
+      }),
+    });
+    const attackPayload = await attackResponse.json();
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackPayload.ok).toBe(false);
+    expect(attackPayload.error.code).toBe("TARGET_NOT_FOUND");
+  });
+
   test("build action without enough scrap returns conflict", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1235,6 +3193,33 @@ describe("RPC API integration (fallback mode)", () => {
     expect(buildPayload.error.code).toBe("INSUFFICIENT_SCRAP");
   });
 
+  test("turret build without enough scrap returns conflict", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "TurretNoScrap", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+
+    const buildResponse = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: joinPayload.data.sessionId,
+        playerId: joinPayload.data.playerId,
+        action: { type: "build", buildType: "turret", direction: "right" },
+      }),
+    });
+    const buildPayload = await buildResponse.json();
+
+    expect(buildResponse.status).toBe(409);
+    expect(buildPayload.ok).toBe(false);
+    expect(buildPayload.error.code).toBe("INSUFFICIENT_SCRAP");
+  });
+
   test("attack cooldown is enforced once in range", async () => {
     expect(server).not.toBeNull();
     const baseUrl = server!.baseUrl;
@@ -1248,87 +3233,76 @@ describe("RPC API integration (fallback mode)", () => {
     const sessionId = joinPayload.data.sessionId as string;
     const playerId = joinPayload.data.playerId as string;
 
-    let inRange = false;
-    for (let step = 0; step < 80; step++) {
-      const observeResponse = await fetch(
-        `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
-      );
-      const observePayload = await observeResponse.json();
-      expect(observeResponse.status).toBe(200);
-      expect(observePayload.ok).toBe(true);
-      const nearestZombie = observePayload.data.observation.nearestZombie as
-        | { distance: number; dx: number; dy: number }
-        | undefined;
-      const nearestDistance = nearestZombie?.distance;
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 1,
+    });
 
-      if (nearestDistance !== undefined && nearestDistance <= 1) {
-        inRange = true;
-        break;
-      }
+    expect(inRange).toBe(true);
+    const preAttackObserve = await fetch(
+      `${baseUrl}/api/game/observe?session=${encodeURIComponent(sessionId)}&player=${encodeURIComponent(playerId)}`,
+    );
+    const preAttackObservePayload = await preAttackObserve.json();
+    expect(preAttackObserve.status).toBe(200);
+    expect(preAttackObservePayload.ok).toBe(true);
+    const nearestZombie = preAttackObservePayload.data.observation.nearestZombie as
+      | { distance: number; dx: number; dy: number }
+      | undefined;
+    expect(nearestZombie).toBeDefined();
+    const nearestZombieId = preAttackObservePayload.data.observation.nearestZombie?.id as string | undefined;
+    expect(nearestZombieId).toBeTruthy();
+    const expectedFacing = directionTowardDelta(nearestZombie!.dx, nearestZombie!.dy);
 
-      if (!nearestZombie) {
-        break;
-      }
+    const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: nearestZombieId },
+      }),
+    });
+    const firstAttackPayload = await firstAttack.json();
+    expect(firstAttack.status).toBe(200);
+    expect(firstAttackPayload.ok).toBe(true);
+    expect(firstAttackPayload.data.state.players[playerId].facing).toBe(expectedFacing);
 
-      const primaryDirection: Direction =
-        Math.abs(nearestZombie.dx) >= Math.abs(nearestZombie.dy)
-          ? nearestZombie.dx > 0
-            ? "right"
-            : "left"
-          : nearestZombie.dy > 0
-            ? "down"
-            : "up";
-      const secondaryDirection: Direction | null =
-        primaryDirection === "left" || primaryDirection === "right"
-          ? nearestZombie.dy === 0
-            ? null
-            : nearestZombie.dy > 0
-              ? "down"
-              : "up"
-          : nearestZombie.dx === 0
-            ? null
-            : nearestZombie.dx > 0
-              ? "right"
-              : "left";
+    const secondAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack" },
+      }),
+    });
+    const secondAttackPayload = await secondAttack.json();
+    expect(secondAttack.status).toBe(409);
+    expect(secondAttackPayload.ok).toBe(false);
+    expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
 
-      const tryMove = async (direction: Direction) => {
-        const response = await fetch(`${baseUrl}/api/game/action`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session: sessionId,
-            playerId,
-            action: { type: "move", direction },
-          }),
-        });
-        const payload = await response.json();
-        return { response, payload };
-      };
+  test("attack cooldown is enforced before explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
 
-      let moveAttempt = await tryMove(primaryDirection);
-      if (
-        moveAttempt.response.status === 409 &&
-        (moveAttempt.payload.error.code === "MOVE_BLOCKED" || moveAttempt.payload.error.code === "MOVE_OCCUPIED") &&
-        secondaryDirection
-      ) {
-        moveAttempt = await tryMove(secondaryDirection);
-      }
-      if (moveAttempt.response.status === 200) {
-        expect(moveAttempt.payload.ok).toBe(true);
-      } else {
-        expect(moveAttempt.response.status).toBe(409);
-        expect(["MOVE_BLOCKED", "MOVE_OCCUPIED"]).toContain(moveAttempt.payload.error.code);
-        const progressTick = await fetch(`${baseUrl}/api/game/tick`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session: sessionId }),
-        });
-        const progressPayload = await progressTick.json();
-        expect(progressTick.status).toBe(200);
-        expect(progressPayload.ok).toBe(true);
-      }
-    }
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CooldownUnknownAttackTarget", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
 
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 1,
+    });
     expect(inRange).toBe(true);
 
     const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
@@ -1337,7 +3311,7 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         session: sessionId,
         playerId,
-        action: { type: "attack" },
+        action: { type: "attack", targetId: "z-1" },
       }),
     });
     const firstAttackPayload = await firstAttack.json();
@@ -1350,7 +3324,56 @@ describe("RPC API integration (fallback mode)", () => {
       body: JSON.stringify({
         session: sessionId,
         playerId,
-        action: { type: "attack" },
+        action: { type: "attack", targetId: "z-missing" },
+      }),
+    });
+    const secondAttackPayload = await secondAttack.json();
+    expect(secondAttack.status).toBe(409);
+    expect(secondAttackPayload.ok).toBe(false);
+    expect(secondAttackPayload.error.code).toBe("ATTACK_COOLDOWN");
+  });
+
+  test("attack cooldown is enforced before trimmed explicit target validation", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const joinResponse = await fetch(`${baseUrl}/api/game/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerName: "CooldownTrimmedUnknownAttackTarget", zombieCount: 1 }),
+    });
+    const joinPayload = await joinResponse.json();
+    const sessionId = joinPayload.data.sessionId as string;
+    const playerId = joinPayload.data.playerId as string;
+
+    const inRange = await movePlayerIntoRange({
+      baseUrl,
+      sessionId,
+      playerId,
+      targetDistance: 1,
+    });
+    expect(inRange).toBe(true);
+
+    const firstAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: "z-1" },
+      }),
+    });
+    const firstAttackPayload = await firstAttack.json();
+    expect(firstAttack.status).toBe(200);
+    expect(firstAttackPayload.ok).toBe(true);
+
+    const secondAttack = await fetch(`${baseUrl}/api/game/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: sessionId,
+        playerId,
+        action: { type: "attack", targetId: "  z-missing  " },
       }),
     });
     const secondAttackPayload = await secondAttack.json();
@@ -2369,7 +4392,7 @@ describe("RPC API integration (fallback mode)", () => {
     expect(startPayload.data.party.status).toBe("in_game");
     expect(Object.keys(startPayload.data.state.players).length).toBe(4);
     expect(startPayload.data.state.companion).toBeDefined();
-    expect(startPayload.data.state.companion.name).toBe("CAI");
+    expect(startPayload.data.state.companion.name).toBe("Claude Bot");
     expect(startPayload.data.state.mode).toBe("endless");
     expect(startPayload.data.state.wave).toBe(1);
 
@@ -2380,6 +4403,1208 @@ describe("RPC API integration (fallback mode)", () => {
     expect(statePayload.data.party.sessionId).toBe(startPayload.data.sessionId);
     expect(Object.keys(statePayload.data.state.players).length).toBe(4);
     expect(statePayload.data.state.companion).toBeDefined();
+  });
+
+  test("party start accepts terminatorCount alias", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: 2,
+        agentEnabled: false,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(Object.keys(startPayload.data.state.zombies).length).toBe(2);
+    expect(startPayload.data.state.companion).toBeUndefined();
+  });
+
+  test("party start accepts terminatorCount alias boundary values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasTerminatorBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        terminatorCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasTerminatorBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        terminatorCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("party start accepts legacy zombieCount alias", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasLegacyLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        agentEnabled: false,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(Object.keys(startPayload.data.state.zombies).length).toBe(2);
+  });
+
+  test("party start accepts legacy zombieCount alias boundary values", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasLegacyBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        zombieCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasLegacyBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        zombieCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("party start accepts matching zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasMatchingLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 3,
+        terminatorCount: 3,
+        agentEnabled: false,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(200);
+    expect(startPayload.ok).toBe(true);
+    expect(Object.keys(startPayload.data.state.zombies).length).toBe(3);
+  });
+
+  test("party start accepts matching boundary counts", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const minContext = await createReadySingleMemberParty(baseUrl, "AliasBoundaryMinLeader");
+    const minStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: minContext.partyId,
+        playerId: minContext.leaderPlayerId,
+        zombieCount: 1,
+        terminatorCount: 1,
+        agentEnabled: false,
+      }),
+    });
+    const minStartPayload = await minStartResponse.json();
+    expect(minStartResponse.status).toBe(200);
+    expect(minStartPayload.ok).toBe(true);
+    expect(Object.keys(minStartPayload.data.state.zombies).length).toBe(1);
+
+    const maxContext = await createReadySingleMemberParty(baseUrl, "AliasBoundaryMaxLeader");
+    const maxStartResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId: maxContext.partyId,
+        playerId: maxContext.leaderPlayerId,
+        zombieCount: 32,
+        terminatorCount: 32,
+        agentEnabled: false,
+      }),
+    });
+    const maxStartPayload = await maxStartResponse.json();
+    expect(maxStartResponse.status).toBe(200);
+    expect(maxStartPayload.ok).toBe(true);
+    expect(Object.keys(maxStartPayload.data.state.zombies).length).toBe(32);
+  });
+
+  test("party start rejects mismatched zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasMismatchLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 3,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects mismatched boundary zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasBoundaryMismatchLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1,
+        terminatorCount: 32,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects reversed boundary mismatch zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasReversedBoundaryMismatchLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 32,
+        terminatorCount: 1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects fractional terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasFractionalLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects fractional zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasFractionalZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects fractional terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasFractionalTerminatorCountWithValidZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects fractional zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasFractionalZombieCountWithValidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasLowTerminatorCountWithValidZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasLowZombieCountWithValidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects negative terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNegativeTerminatorCountWithValidZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects negative zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNegativeZombieCountWithValidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: -1,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects out-of-range terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasRangeLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects out-of-range zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasRangeZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects non-number terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasTypeLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: "4",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects non-number zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasTypeZombieLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "4",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects invalid zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasInvalidZombieCountLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "2",
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects null zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasNullZombieCountLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects null zombieCount when terminatorCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithoutTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects both null zombieCount and terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasBothNullCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount takes precedence over out-of-range terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithOutOfRangeTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount takes precedence over low terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithLowTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount takes precedence over negative terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithNegativeTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount takes precedence over fractional terminatorCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithFractionalTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null zombieCount with invalid terminatorCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullZombieCountWithInvalidTerminatorCountTypeLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: null,
+        terminatorCount: "2",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects invalid terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasInvalidTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: "2",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects null terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects null terminatorCount when zombieCount is omitted", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithoutZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over out-of-range zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithOutOfRangeZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over low zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithLowZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over negative zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithNegativeZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: -1,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount takes precedence over fractional zombieCount", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithFractionalZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start null terminatorCount with invalid zombieCount type is rejected", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNullTerminatorCountWithInvalidZombieCountTypeLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "2",
+        terminatorCount: null,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
+  });
+
+  test("party start rejects out-of-range terminatorCount even when zombieCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasOutOfRangeTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 2,
+        terminatorCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects out-of-range zombieCount even when terminatorCount is valid", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasOutOfRangeZombieCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+        terminatorCount: 2,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasLowTerminatorCountLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects negative terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasNegativeTerminatorCountLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        terminatorCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects low zombieCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasLowZombieCountLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects negative zombieCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(baseUrl, "AliasNegativeZombieCountLeader");
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching out-of-range zombieCount and terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingOutOfRangeCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 33,
+        terminatorCount: 33,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching low zombieCount and terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingLowCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 0,
+        terminatorCount: 0,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching negative zombieCount and terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingNegativeCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: -1,
+        terminatorCount: -1,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching fractional zombieCount and terminatorCount with INVALID_ZOMBIE_COUNT", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingFractionalCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: 1.5,
+        terminatorCount: 1.5,
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_ZOMBIE_COUNT");
+  });
+
+  test("party start rejects matching non-number zombieCount and terminatorCount with INVALID_FIELD", async () => {
+    expect(server).not.toBeNull();
+    const baseUrl = server!.baseUrl;
+
+    const { partyId, leaderPlayerId } = await createReadySingleMemberParty(
+      baseUrl,
+      "AliasMatchingInvalidTypeCountFieldsLeader",
+    );
+
+    const startResponse = await fetch(`${baseUrl}/api/party/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        partyId,
+        playerId: leaderPlayerId,
+        zombieCount: "2",
+        terminatorCount: "2",
+      }),
+    });
+    const startPayload = await startResponse.json();
+    expect(startResponse.status).toBe(400);
+    expect(startPayload.ok).toBe(false);
+    expect(startPayload.error.code).toBe("INVALID_FIELD");
   });
 
   test("party leave transfers leader and cleans up empty party", async () => {

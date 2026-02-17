@@ -56,7 +56,7 @@ import type { Action, BuildType, Direction, PartyState, Player } from "./game/ty
 import { getSupabaseMode, verifyBearerToken } from "./supabase/client";
 
 const VALID_DIRECTIONS: ReadonlyArray<Direction> = ["up", "down", "left", "right"];
-const VALID_BUILD_TYPES: ReadonlyArray<BuildType> = ["barricade", "ally_robot"];
+const VALID_BUILD_TYPES: ReadonlyArray<BuildType> = ["barricade", "ally_robot", "turret"];
 const VALID_GAME_MODES = ["classic", "endless"] as const;
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
 
@@ -179,6 +179,19 @@ function parseActionBody(payload: Record<string, unknown>): Action {
     };
   }
 
+  if (actionType === "shoot") {
+    const targetId = optionalNonEmptyString(payload.targetId, "targetId");
+    const directionRaw = optionalString(payload.direction, "direction");
+    if (directionRaw && !VALID_DIRECTIONS.includes(directionRaw as Direction)) {
+      throw new HttpError(400, "INVALID_DIRECTION", `direction must be one of: ${VALID_DIRECTIONS.join(", ")}`);
+    }
+    return {
+      type: "shoot",
+      targetId,
+      direction: directionRaw as Direction | undefined,
+    };
+  }
+
   if (actionType === "build") {
     const buildTypeRaw = requireString(payload.buildType, "buildType");
     if (!VALID_BUILD_TYPES.includes(buildTypeRaw as BuildType)) {
@@ -195,7 +208,7 @@ function parseActionBody(payload: Record<string, unknown>): Action {
     };
   }
 
-  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "wait", "build".');
+  throw new HttpError(400, "INVALID_ACTION", 'type must be one of "move", "attack", "shoot", "wait", "build".');
 }
 
 function parseGameMode(value: unknown): "classic" | "endless" | undefined {
@@ -209,6 +222,42 @@ function parseGameMode(value: unknown): "classic" | "endless" | undefined {
   return mode as "classic" | "endless";
 }
 
+function parseTerminatorCount(body: Record<string, unknown>): number | undefined {
+  if (Object.prototype.hasOwnProperty.call(body, "zombieCount") && body.zombieCount === null) {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "zombieCount" must be a finite number when provided.');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "terminatorCount") && body.terminatorCount === null) {
+    throw new HttpError(400, "INVALID_FIELD", 'Field "terminatorCount" must be a finite number when provided.');
+  }
+
+  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const terminatorCount = optionalNumber(body.terminatorCount, "terminatorCount");
+  const validateCount = (value: number | undefined, fieldName: "zombieCount" | "terminatorCount"): void => {
+    if (value === undefined) {
+      return;
+    }
+    if (!Number.isInteger(value) || value < 1 || value > 32) {
+      throw new HttpError(
+        400,
+        "INVALID_ZOMBIE_COUNT",
+        `Field "${fieldName}" must be an integer between 1 and 32 when provided.`,
+      );
+    }
+  };
+
+  validateCount(zombieCount, "zombieCount");
+  validateCount(terminatorCount, "terminatorCount");
+
+  if (zombieCount !== undefined && terminatorCount !== undefined && zombieCount !== terminatorCount) {
+    throw new HttpError(
+      400,
+      "INVALID_FIELD",
+      'Fields "zombieCount" and "terminatorCount" must match when both are provided.',
+    );
+  }
+  return terminatorCount ?? zombieCount;
+}
+
 async function createOrJoinGameSession(request: Request): Promise<Response> {
   const rawBody = await parseJsonBody(request);
   const body = requireObject(rawBody);
@@ -217,7 +266,7 @@ async function createOrJoinGameSession(request: Request): Promise<Response> {
   const playerName = optionalString(body.playerName, "playerName");
   const serverId = optionalNonEmptyString(body.serverId, "serverId");
   const accessKey = optionalNonEmptyString(body.accessKey, "accessKey");
-  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const zombieCount = parseTerminatorCount(body);
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled");
   const gameMode = parseGameMode(body.gameMode);
 
@@ -647,7 +696,7 @@ async function startPartyMatch(request: Request): Promise<Response> {
   const body = requireObject(rawBody);
   const partyId = requireString(body.partyId, "partyId");
   const playerId = requireString(body.playerId, "playerId");
-  const zombieCount = optionalNumber(body.zombieCount, "zombieCount");
+  const zombieCount = parseTerminatorCount(body);
   const agentEnabled = optionalBoolean(body.agentEnabled, "agentEnabled") ?? true;
   const gameMode = parseGameMode(body.gameMode) ?? "endless";
 
